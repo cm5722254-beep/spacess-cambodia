@@ -1,0 +1,33 @@
+{
+  "name": "spaces-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A self-hostable, privacy-first social platform built around Spaces",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm run start:dev --workspace=spaces-backend",
+    "build:backend": "npm run build --workspace=spaces-backend",
+    "prisma:generate": "npm run prisma:generate --workspace=spaces-backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace=spaces-backend",
+    "prisma:studio": "npm run prisma:studio --workspace=spaces-backend",
+    "test:backend": "npm run test --workspace=spaces-backend",
+    "docker:dev": "docker compose -f deploy/docker-compose.dev.yml up -d",
+    "docker:dev:down": "docker compose -f deploy/docker-compose.dev.yml down",
+    "docker:prod": "docker compose -f deploy/docker-compose.yml up -d --build",
+    "docker:prod:down": "docker compose -f deploy/docker-compose.yml down"
+  },
+  "keywords": [
+    "social",
+    "spaces",
+    "privacy",
+    "nestjs",
+    "flutter",
+    "postgresql",
+    "redis"
+  ],
+  "author": "Spaces Platform Contributors",
+  "license": "UNLICENSED"
+}
+
