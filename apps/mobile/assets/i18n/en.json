@@ -1,0 +1,20 @@
+{
+  "app_name": "Spaces",
+  "welcome_title": "Welcome to Spaces",
+  "welcome_subtitle": "Private social circles and workspaces tailored to your life",
+  "login": "Log In",
+  "register": "Sign Up",
+  "email_or_username": "Email or Username",
+  "password": "Password",
+  "spaces_tab": "Spaces",
+  "feed_tab": "Feed",
+  "chat_tab": "Chat",
+  "profile_tab": "Profile",
+  "focus_mode": "Focus Mode",
+  "focus_mode_desc": "Disable infinite scroll and show daily digest only",
+  "hidden_metrics": "Hide Like Counts",
+  "create_post": "Create New Post",
+  "time_capsule": "Time Capsule",
+  "audience_circles": "Audience Circles"
+}
+

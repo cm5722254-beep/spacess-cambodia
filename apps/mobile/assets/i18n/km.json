@@ -1,0 +1,20 @@
+{
+  "app_name": "Spaces",
+  "welcome_title": "សូមស្វាគមន៍មកកាន់ Spaces",
+  "welcome_subtitle": "បណ្ដាញសង្គមឯកជន និងការងារតាមបរិបទរបស់អ្នក",
+  "login": "ចូលគណនី",
+  "register": "ចុះឈ្មោះ",
+  "email_or_username": "អ៊ីមែល ឬ ឈ្មោះអ្នកប្រើ",
+  "password": "ពាក្យសម្ងាត់",
+  "spaces_tab": "ទីធ្លា (Spaces)",
+  "feed_tab": "ផ្ទាំងព័ត៌មាន (Feed)",
+  "chat_tab": "សារ (Chat)",
+  "profile_tab": "គណនី (Profile)",
+  "focus_mode": "Focus Mode",
+  "focus_mode_desc": "ផ្អាក infinite scroll និងបង្ហាញតែរបាយការណ៍ប្រចាំថ្ងៃ",
+  "hidden_metrics": "លាក់ចំនួន Like",
+  "create_post": "បង្កើតការបង្ហោះថ្មី",
+  "time_capsule": "Time Capsule",
+  "audience_circles": "រង្វង់ទំនាក់ទំនង (Circles)"
+}
+
