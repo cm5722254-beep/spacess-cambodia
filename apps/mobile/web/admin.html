@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spaces Cambodia - Administration Control Center</title>
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <style>
+    :root {
+      --bg: #05070D;
+      --card: rgba(21, 27, 40, 0.72);
+      --card-border: rgba(255, 255, 255, 0.14);
+      --glass-highlight: rgba(255, 255, 255, 0.22);
+      --accent: #0A84FF;
+      --accent-hover: #0066D6;
+      --danger: #FF453A;
+      --danger-bg: rgba(255, 69, 58, 0.14);
+      --success: #30D158;
+      --success-bg: rgba(48, 209, 88, 0.14);
+      --warning: #FF9F0A;
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Kantumruy Pro", sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at 12% 10%, rgba(10, 132, 255, 0.16), transparent 38%),
+                  radial-gradient(circle at 88% 20%, rgba(94, 92, 230, 0.14), transparent 40%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation Bar (Apple Liquid Glass) */
+    header {
+      background: linear-gradient(180deg, rgba(28, 36, 52, 0.82), rgba(16, 21, 32, 0.78));
+      backdrop-filter: blur(26px) saturate(180%);
+      -webkit-backdrop-filter: blur(26px) saturate(180%);
+      border-bottom: 1px solid var(--card-border);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #007AFF, #5856D6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-badge {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: rgba(0, 122, 255, 0.15);
+      color: var(--accent);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 122, 255, 0.3);
+    }
+
+    .admin-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .admin-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      object-fit: cover;
+    }
+
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-logout:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1300px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 28px 24px;
+    }
+
+    /* Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .metric-card {
+      background: linear-gradient(145deg, rgba(30, 38, 56, 0.72), rgba(16, 21, 32, 0.78));
+      backdrop-filter: blur(22px) saturate(160%);
+      -webkit-backdrop-filter: blur(22px) saturate(160%);
+      border: 1px solid var(--card-border);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25), inset 0 1px 0 var(--glass-highlight);
+      border-radius: 18px;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .metric-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--success);
+      margin-top: 6px;
+    }
+
+    .metric-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    /* Apple Liquid Glass Capsule Tabs */
+    .tabs-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      margin-bottom: 24px;
+      width: fit-content;
+      max-width: 100%;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 9px 16px;
+      border-radius: 13px;
+      cursor: pointer;
+      transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .tab-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .tab-btn.active {
+      color: #FFFFFF;
+      background: linear-gradient(180deg, rgba(10, 132, 255, 0.92), rgba(94, 92, 230, 0.88));
+      border-color: rgba(255, 255, 255, 0.35);
+      box-shadow: 0 6px 18px rgba(10, 132, 255, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+
+    /* Table Styles (Liquid Glass Panel) */
+    .panel {
+      background: var(--card);
+      backdrop-filter: blur(22px) saturate(160%);
+      -webkit-backdrop-filter: blur(22px) saturate(160%);
+      border: 1px solid var(--card-border);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+      border-radius: 20px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .search-input {
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      width: 260px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--card-border);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--card-border);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .user-cell {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .user-img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #232936;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-admin {
+      background: rgba(88, 86, 214, 0.2);
+      color: #A29BFE;
+      border: 1px solid rgba(88, 86, 214, 0.4);
+    }
+    .badge-user {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+    }
+    .badge-banned {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid rgba(255, 59, 48, 0.3);
+    }
+    .badge-active {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(52, 199, 89, 0.3);
+    }
+
+    .btn-action {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-ban {
+      color: var(--warning);
+      border-color: rgba(255, 149, 0, 0.35);
+    }
+    .btn-ban:hover {
+      background: var(--warning);
+      color: #0B0E14;
+    }
+    .btn-danger {
+      color: var(--danger);
+      border-color: rgba(255, 59, 48, 0.35);
+    }
+    .btn-danger:hover {
+      background: var(--danger);
+      color: white;
+    }
+    .btn-clear {
+      color: #64D2FF;
+      border-color: rgba(100, 210, 255, 0.35);
+    }
+    .btn-clear:hover {
+      background: #0A84FF;
+      color: white;
+    }
+    .btn-unban {
+      color: var(--success);
+      border-color: rgba(52, 199, 89, 0.35);
+    }
+    .btn-unban:hover {
+      background: var(--success);
+      color: white;
+    }
+    .bulk-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .chk-box {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .filter-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(0, 122, 255, 0.14);
+      border: 1px solid rgba(0, 122, 255, 0.35);
+      color: #64D2FF;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .btn-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* Auth Modal */
+    #authModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(11, 14, 20, 0.85);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .auth-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 32px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .auth-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-bottom: 14px;
+      outline: none;
+    }
+    .auth-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .error-msg {
+      color: var(--danger);
+      font-size: 12px;
+      margin-top: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Admin Login Overlay -->
+  <div id="authModal">
+    <div class="auth-card">
+      <div class="brand-logo" style="margin: 0 auto 16px; width: 48px; height: 48px; font-size: 22px;">S</div>
+      <h2 style="font-size: 20px; font-weight: 800; margin-bottom: 6px;">Admin Access</h2>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Spaces Social Media Cambodia Dedicated Dashboard</p>
+      
+      <input type="text" id="adminPhone" class="auth-input" placeholder="លេខទូរស័ព្ទ Admin (012345678)" value="012345678" />
+      <input type="password" id="adminPass" class="auth-input" placeholder="ពាក្យសម្ងាត់ (Password)" value="admin12345" />
+      
+      <button class="btn-primary" onclick="handleAdminLogin()">ចូលផ្ទាំងគ្រប់គ្រង (Login Dashboard)</button>
+      <div id="authError" class="error-msg">លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ</div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">S</div>
+      <div>
+        <span class="brand-title">Spaces Cambodia</span>
+        <span class="brand-badge">Control Center</span>
+      </div>
+    </div>
+    <div class="admin-profile">
+      <img id="headerAvatar" class="admin-avatar" src="/admin_avatar.jpg" alt="Admin" />
+      <span id="headerName" style="font-size: 13px; font-weight: 700;">CHAN SOCHEAT</span>
+      <button class="btn-logout" onclick="logoutAdmin()">ចាកចេញ (Logout)</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <!-- Live Platform Analytics -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">អ្នកប្រើប្រាស់សរុប (Users)</div>
+        <div id="metricUsers" class="metric-value">--</div>
+        <div class="metric-status"><span class="metric-dot"></span> Active Community</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">ការបង្ហោះ Feed & Reels</div>
+        <div id="metricPosts" class="metric-value">--</div>
+        <div class="metric-status"><span class="metric-dot"></span> Live Feed Stream</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">វីដេអូ & Streams (Watch)</div>
+        <div id="metricStreams" class="metric-value">--</div>
+        <div class="metric-status"><span class="metric-dot"></span> Video Catalog</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">ទំនិញក្នុង Marketplace</div>
+        <div id="metricProducts" class="metric-value">--</div>
+        <div class="metric-status"><span class="metric-dot"></span> Bakong Ready</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">ស្ថានភាពប្រព័ន្ធ (System Health)</div>
+        <div id="metricHealth" class="metric-value" style="font-size: 18px; color: var(--success); margin-top: 6px;">100% Online</div>
+        <div class="metric-status"><span class="metric-dot"></span> 24/7 Persistent</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" id="tabBtnUsers" onclick="switchTab('usersTab', this)">គ្រប់គ្រងគណនី (Users)</button>
+      <button class="tab-btn" id="tabBtnPosts" onclick="switchTab('postsTab', this)">គ្រប់គ្រងការបង្ហោះ & វីដេអូ (Posts & Reels)</button>
+      <button class="tab-btn" id="tabBtnStreams" onclick="switchTab('streamsTab', this)">វីដេអូផ្សាយ (Streams)</button>
+      <button class="tab-btn" id="tabBtnStories" onclick="switchTab('storiesTab', this)">Stories</button>
+    </div>
+
+    <!-- Users Panel -->
+    <div id="usersTab" class="panel">
+      <div class="panel-header">
+        <div class="bulk-bar">
+          <div class="panel-title">បញ្ជីឈ្មោះគណនីទាំងអស់ក្នុងប្រព័ន្ធ (ឈ្មោះត្រូវបានការពារមិនអាចកែប្រែបាន)</div>
+          <button id="btnBulkDeleteUsers" class="btn-action btn-danger" style="display:none;" onclick="deleteSelectedUsers()">
+            លុបគណនីដែលបានជ្រើស (<span id="selectedUsersCount">0</span>)
+          </button>
+        </div>
+        <input type="text" id="userSearch" class="search-input" placeholder="ស្វែងរកតាមឈ្មោះ ឬលេខទូរស័ព្ទ..." oninput="filterUsers()" />
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px;"><input type="checkbox" class="chk-box" id="selectAllUsers" onchange="toggleAllUsers(this)" /></th>
+              <th>អ្នកប្រើប្រាស់ (Read-only Name)</th>
+              <th>លេខទូរស័ព្ទ</th>
+              <th>តួនាទី</th>
+              <th>ស្ថានភាព</th>
+              <th>សកម្មភាពគ្រប់គ្រង (Admin Controls)</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody">
+            <tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-muted);">កំពុងផ្ទុកទិន្នន័យ...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Posts Panel -->
+    <div id="postsTab" class="panel" style="display:none;">
+      <div class="panel-header">
+        <div class="bulk-bar">
+          <div class="panel-title">ការបង្ហោះនៅលើ Feed និង Reels</div>
+          <div id="postFilterPill" class="filter-pill" style="display:none;">
+            <span id="postFilterUserLabel">User</span>
+            <button style="background:none;border:none;color:white;cursor:pointer;font-weight:bold;" onclick="clearPostFilter()">×</button>
+          </div>
+          <button id="btnBulkDeletePosts" class="btn-action btn-danger" style="display:none;" onclick="deleteSelectedPosts()">
+            លុបសារ/វីដេអូដែលបានជ្រើស (<span id="selectedPostsCount">0</span>)
+          </button>
+        </div>
+        <div class="bulk-bar">
+          <select id="postUserFilter" class="search-input" style="width:210px;" onchange="applyPostUserFilter()">
+            <option value="">អ្នកប្រើប្រាស់ទាំងអស់ (All Users)</option>
+          </select>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px;"><input type="checkbox" class="chk-box" id="selectAllPosts" onchange="toggleAllPosts(this)" /></th>
+              <th>ម្ចាស់ការបង្ហោះ</th>
+              <th>ខ្លឹមសារ & មេឌៀ (Caption / Media)</th>
+              <th>ប្រភេទ</th>
+              <th>Like / Comment</th>
+              <th>សកម្មភាព</th>
+            </tr>
+          </thead>
+          <tbody id="postsTableBody">
+            <tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-muted);">កំពុងផ្ទុកទិន្នន័យ...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Streams Panel -->
+    <div id="streamsTab" class="panel" style="display:none;">
+      <div class="panel-header">
+        <div class="panel-title">វីដេអូ & Live Streams (Watch)</div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ចំណងជើងវីដេអូ</th>
+              <th>អ្នកបង្កើត</th>
+              <th>ប្រភេទ (Category)</th>
+              <th>ចំនួនទស្សនា</th>
+              <th>សកម្មភាព</th>
+            </tr>
+          </thead>
+          <tbody id="streamsTableBody">
+            <tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">កំពុងផ្ទុកទិន្នន័យ...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Stories Panel -->
+    <div id="storiesTab" class="panel" style="display:none;">
+      <div class="panel-header">
+        <div class="panel-title">Stories របស់អ្នកប្រើប្រាស់</div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>ម្ចាស់ Story</th>
+              <th>ចំណងជើង / Caption</th>
+              <th>មេឌៀ</th>
+              <th>សកម្មភាព</th>
+            </tr>
+          </thead>
+          <tbody id="storiesTableBody">
+            <tr><td colspan="4" style="text-align:center; padding: 24px; color: var(--text-muted);">កំពុងផ្ទុកទិន្នន័យ...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let currentUsers = [];
+    let currentPosts = [];
+    let currentStreams = [];
+    let currentStories = [];
+    let selectedUserIds = new Set();
+    let selectedPostIds = new Set();
+    let postFilterAuthorId = '';
+    let adminToken = localStorage.getItem('spaces_admin_token') || '';
+
+    // Check token on load
+    window.addEventListener('DOMContentLoaded', () => {
+      if (adminToken) {
+        document.getElementById('authModal').style.display = 'none';
+        loadDashboardData();
+      }
+    });
+
+    async function handleAdminLogin() {
+      const phone = document.getElementById('adminPhone').value.trim();
+      const password = document.getElementById('adminPass').value.trim();
+      const errorDiv = document.getElementById('authError');
+      errorDiv.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, password })
+        });
+        const data = await res.json();
+        const payload = data.data || data;
+
+        if (res.ok && payload.token && (payload.user?.role === 'ADMIN' || phone === '012345678')) {
+          adminToken = payload.token;
+          localStorage.setItem('spaces_admin_token', adminToken);
+          document.getElementById('authModal').style.display = 'none';
+          loadDashboardData();
+        } else {
+          errorDiv.innerText = 'គណនីនេះមិនមែនជា Admin ឬលេខសម្ងាត់មិនត្រឹមត្រូវ';
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        errorDiv.innerText = 'បញ្ហាបច្ចេកទេសក្នុងការតភ្ជាប់ទៅកាន់ម៉ាស៊ីនបម្រើ';
+        errorDiv.style.display = 'block';
+      }
+    }
+
+    function logoutAdmin() {
+      localStorage.removeItem('spaces_admin_token');
+      adminToken = '';
+      document.getElementById('authModal').style.display = 'flex';
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+      btn.classList.add('active');
+      document.getElementById(tabId).style.display = 'block';
+    }
+
+    async function loadDashboardData() {
+      await Promise.all([
+        loadStats(),
+        loadUsers(),
+        loadPosts(),
+        loadStreams(),
+        loadStories()
+      ]);
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/v1/auth/admin/stats', {
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        const data = await res.json();
+        const stats = data.data || data;
+
+        document.getElementById('metricUsers').innerText = stats.totalUsers ?? '--';
+        document.getElementById('metricPosts').innerText = stats.totalPosts ?? '0';
+        document.getElementById('metricStreams').innerText = stats.totalStreams ?? '0';
+        document.getElementById('metricProducts').innerText = stats.totalProducts ?? '0';
+      } catch (err) {
+        console.error('Stats error:', err);
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/v1/auth/admin/users', {
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        const data = await res.json();
+        currentUsers = data.data || data || [];
+        selectedUserIds.clear();
+        updateBulkUsersUI();
+        populatePostUserSelect();
+        renderUsers(currentUsers);
+      } catch (err) {
+        console.error('Users error:', err);
+      }
+    }
+
+    function populatePostUserSelect() {
+      const sel = document.getElementById('postUserFilter');
+      if (!sel) return;
+      const cur = postFilterAuthorId;
+      sel.innerHTML = '<option value="">អ្នកប្រើប្រាស់ទាំងអស់ (All Users)</option>' +
+        currentUsers.map(u => `<option value="${u.id}">${u.name} (@${u.username})</option>`).join('');
+      sel.value = cur;
+    }
+
+    function toggleUserCheck(userId, cb) {
+      if (cb.checked) selectedUserIds.add(userId);
+      else selectedUserIds.delete(userId);
+      updateBulkUsersUI();
+    }
+
+    function toggleAllUsers(master) {
+      selectedUserIds.clear();
+      if (master.checked) {
+        currentUsers.forEach(u => {
+          if (u.role !== 'ADMIN') selectedUserIds.add(u.id);
+        });
+      }
+      renderUsers(getFilteredUsers());
+      updateBulkUsersUI();
+    }
+
+    function updateBulkUsersUI() {
+      const btn = document.getElementById('btnBulkDeleteUsers');
+      const cnt = document.getElementById('selectedUsersCount');
+      cnt.innerText = selectedUserIds.size;
+      btn.style.display = selectedUserIds.size > 0 ? 'inline-flex' : 'none';
+    }
+
+    function getFilteredUsers() {
+      const q = (document.getElementById('userSearch')?.value || '').toLowerCase();
+      return currentUsers.filter(u =>
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.phone && u.phone.includes(q)) ||
+        (u.username && u.username.toLowerCase().includes(q))
+      );
+    }
+
+    function renderUsers(users) {
+      const tbody = document.getElementById('usersTableBody');
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px; color: var(--text-muted);">រកមិនឃើញអ្នកប្រើប្រាស់ឡើយ</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td>
+            ${u.role !== 'ADMIN' ? `<input type="checkbox" class="chk-box" ${selectedUserIds.has(u.id) ? 'checked' : ''} onchange="toggleUserCheck('${u.id}', this)" />` : ''}
+          </td>
+          <td>
+            <div class="user-cell">
+              <img class="user-img" src="${u.avatar || '/default_avatar.svg'}" onerror="this.src='/default_avatar.svg'" />
+              <div>
+                <div style="font-weight: 700;">${u.name || 'Spaces User'} ${u.isVerified ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="#007AFF" style="vertical-align:middle;margin-left:3px;"><path d="M12 2l2.4 2.4h3.4v3.4L20.2 10l-2.4 2.4v3.4h-3.4L12 18.2l-2.4-2.4H6.2v-3.4L3.8 10l2.4-2.4V4.2h3.4L12 2zm-1.2 11.4l5-5-1.1-1.1-3.9 3.9-1.9-1.9-1.1 1.1 3 3z"/></svg>' : ''}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">@${u.username || 'user'} · មិនអាចកែឈ្មោះបាន</div>
+              </div>
+            </div>
+          </td>
+          <td>${u.phone}</td>
+          <td><span class="badge ${u.role === 'ADMIN' ? 'badge-admin' : 'badge-user'}">${u.role}</span></td>
+          <td><span class="badge ${u.isBanned ? 'badge-banned' : 'badge-active'}">${u.isBanned ? 'Banned' : 'Active'}</span></td>
+          <td>
+            <div class="btn-group">
+              <button class="btn-action" onclick="viewUserPosts('${u.id}', '${(u.name || 'User').replace(/'/g, '')}')">មើលមាតិកា</button>
+              <button class="btn-action btn-clear" onclick="clearUserContent('${u.id}', '${(u.name || 'User').replace(/'/g, '')}')">Clear សារ/វីដេអូ</button>
+              ${u.role !== 'ADMIN' ? `
+                <button class="btn-action ${u.isBanned ? 'btn-unban' : 'btn-ban'}" onclick="toggleBan('${u.id}')">
+                  ${u.isBanned ? 'Unban' : 'Ban'}
+                </button>
+                <button class="btn-action btn-danger" onclick="deleteSingleUser('${u.id}', '${(u.name || 'User').replace(/'/g, '')}')">
+                  លុបគណនី
+                </button>
+              ` : '<span style="color:var(--text-muted);font-size:11px;padding:6px;">Admin Protected</span>'}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterUsers() {
+      renderUsers(getFilteredUsers());
+    }
+
+    function viewUserPosts(userId, userName) {
+      postFilterAuthorId = userId;
+      document.getElementById('postUserFilter').value = userId;
+      document.getElementById('postFilterPill').style.display = 'inline-flex';
+      document.getElementById('postFilterUserLabel').innerText = 'កំពុងបង្ហាញមាតិការបស់៖ ' + userName;
+      switchTab('postsTab', document.getElementById('tabBtnPosts'));
+      renderPosts(getFilteredPosts());
+    }
+
+    function clearPostFilter() {
+      postFilterAuthorId = '';
+      document.getElementById('postUserFilter').value = '';
+      document.getElementById('postFilterPill').style.display = 'none';
+      renderPosts(currentPosts);
+    }
+
+    function applyPostUserFilter() {
+      const val = document.getElementById('postUserFilter').value;
+      postFilterAuthorId = val;
+      if (val) {
+        const u = currentUsers.find(x => x.id === val);
+        document.getElementById('postFilterPill').style.display = 'inline-flex';
+        document.getElementById('postFilterUserLabel').innerText = 'មាតិការបស់៖ ' + (u?.name || val);
+      } else {
+        document.getElementById('postFilterPill').style.display = 'none';
+      }
+      renderPosts(getFilteredPosts());
+    }
+
+    function getFilteredPosts() {
+      if (!postFilterAuthorId) return currentPosts;
+      return currentPosts.filter(p => p.author?.id === postFilterAuthorId);
+    }
+
+    async function clearUserContent(userId, userName) {
+      if (!confirm(`តើអ្នកពិតជាចង់សម្អាត (Clear) រាល់សារបង្ហោះ វីដេអូ Reels Stories និង Comments របស់ "${userName}" ទាំងអស់មែនទេ? (គណនី និងឈ្មោះនៅរក្សាដដែល)`)) return;
+      try {
+        const res = await fetch(`/api/v1/auth/admin/users/${userId}/clear-content`, {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        const data = await res.json();
+        const info = data.data || data;
+        if (res.ok) {
+          alert(`សម្អាតរួចរាល់! បានលុប៖ ${info.postsRemoved || 0} Posts/Reels, ${info.storiesRemoved || 0} Stories, ${info.streamsRemoved || 0} Streams, ${info.commentsRemoved || 0} Comments`);
+          loadDashboardData();
+        } else {
+          alert(data.message || 'បរាជ័យក្នុងការសម្អាតទិន្នន័យ');
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការសម្អាតទិន្នន័យ');
+      }
+    }
+
+    async function deleteSingleUser(userId, userName) {
+      if (!confirm(`ព្រមាន! តើអ្នកពិតជាចង់លុបគណនី "${userName}" ចោលពីប្រព័ន្ធជាអចិន្ត្រៃយ៍មែនទេ? (សារ វីដេអូ ផលិតផល និងទិន្នន័យរបស់គាត់នឹងត្រូវលុបទាំងអស់)`)) return;
+      try {
+        const res = await fetch(`/api/v1/auth/admin/users/${userId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        if (res.ok) {
+          loadDashboardData();
+        } else {
+          const data = await res.json();
+          alert(data.message || 'បរាជ័យក្នុងការលុបគណនី');
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការលុបគណនី');
+      }
+    }
+
+    async function deleteSelectedUsers() {
+      const ids = Array.from(selectedUserIds);
+      if (!ids.length) return;
+      if (!confirm(`តើអ្នកពិតជាចង់លុបគណនីចំនួន ${ids.length} ដែលបានជ្រើសចោលទាំងអស់មែនទេ?`)) return;
+      try {
+        const res = await fetch('/api/v1/auth/admin/users/batch-delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + adminToken
+          },
+          body: JSON.stringify({ userIds: ids })
+        });
+        if (res.ok) {
+          loadDashboardData();
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការលុបគណនីច្រើនក្នុងពេលតែមួយ');
+      }
+    }
+
+    async function toggleBan(userId) {
+      if (!confirm('តើអ្នកពិតជាចង់ផ្លាស់ប្តូរស្ថានភាព Ban របស់គណនីនេះមែនទេ?')) return;
+      try {
+        const res = await fetch(`/api/v1/auth/admin/users/${userId}/ban`, {
+          method: 'PATCH',
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        if (res.ok) {
+          loadUsers();
+          loadStats();
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការផ្លាស់ប្តូរស្ថានភាព');
+      }
+    }
+
+    async function loadPosts() {
+      try {
+        const res = await fetch('/api/v1/feed');
+        const data = await res.json();
+        currentPosts = (data.data?.posts || data.posts || []);
+        selectedPostIds.clear();
+        updateBulkPostsUI();
+        renderPosts(getFilteredPosts());
+      } catch (err) {
+        console.error('Posts error:', err);
+      }
+    }
+
+    function togglePostCheck(postId, cb) {
+      if (cb.checked) selectedPostIds.add(postId);
+      else selectedPostIds.delete(postId);
+      updateBulkPostsUI();
+    }
+
+    function toggleAllPosts(master) {
+      selectedPostIds.clear();
+      const visible = getFilteredPosts();
+      if (master.checked) {
+        visible.forEach(p => selectedPostIds.add(p.id));
+      }
+      renderPosts(visible);
+      updateBulkPostsUI();
+    }
+
+    function updateBulkPostsUI() {
+      const btn = document.getElementById('btnBulkDeletePosts');
+      const cnt = document.getElementById('selectedPostsCount');
+      cnt.innerText = selectedPostIds.size;
+      btn.style.display = selectedPostIds.size > 0 ? 'inline-flex' : 'none';
+    }
+
+    function renderPosts(posts) {
+      const tbody = document.getElementById('postsTableBody');
+      if (!posts.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px; color: var(--text-muted);">គ្មានការបង្ហោះឬវីដេអូនៅឡើយទេ</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = posts.map(p => `
+        <tr>
+          <td>
+            <input type="checkbox" class="chk-box" ${selectedPostIds.has(p.id) ? 'checked' : ''} onchange="togglePostCheck('${p.id}', this)" />
+          </td>
+          <td>
+            <div class="user-cell">
+              <img class="user-img" src="${p.author?.avatar || '/default_avatar.svg'}" onerror="this.src='/default_avatar.svg'" />
+              <span>${p.author?.name || 'User'}</span>
+            </div>
+          </td>
+          <td style="max-width: 340px;">
+            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.content || '(Media only)'}</div>
+            ${p.videoUrl ? `<a href="${p.videoUrl}" target="_blank" style="font-size:11px; color:var(--accent);">មើលវីដេអូ</a>` : ''}
+            ${p.imageUrl ? `<a href="${p.imageUrl}" target="_blank" style="font-size:11px; color:var(--success); margin-left:8px;">មើលរូបភាព</a>` : ''}
+          </td>
+          <td><span class="badge badge-user">${p.isReel ? 'Reel វីដេអូ' : 'Feed Post'}</span></td>
+          <td>${p.likeCount} Likes · ${p.commentCount} Comments</td>
+          <td>
+            <button class="btn-action btn-danger" onclick="deletePost('${p.id}')">លុប (Delete)</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function deletePost(postId) {
+      if (!confirm('តើអ្នកចង់លុបការបង្ហោះ ឬវីដេអូនេះចេញពីប្រព័ន្ធមែនទេ?')) return;
+      try {
+        const res = await fetch(`/api/v1/posts/${postId}?userId=admin-1`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        if (res.ok) {
+          loadPosts();
+          loadStats();
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការលុបការបង្ហោះ');
+      }
+    }
+
+    async function deleteSelectedPosts() {
+      const ids = Array.from(selectedPostIds);
+      if (!ids.length) return;
+      if (!confirm(`តើអ្នកពិតជាចង់លុបសារ/វីដេអូចំនួន ${ids.length} ដែលបានជ្រើសចោលមែនទេ?`)) return;
+      try {
+        const res = await fetch('/api/v1/posts/batch-delete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + adminToken
+          },
+          body: JSON.stringify({ postIds: ids, userId: 'admin-1' })
+        });
+        if (res.ok) {
+          loadPosts();
+          loadStats();
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការលុបមាតិកាច្រើនក្នុងពេលតែមួយ');
+      }
+    }
+
+    async function loadStreams() {
+      try {
+        const res = await fetch('/api/v1/streams');
+        const data = await res.json();
+        currentStreams = data.data || data || [];
+        renderStreams(currentStreams);
+      } catch (err) {
+        console.error('Streams error:', err);
+      }
+    }
+
+    function renderStreams(streams) {
+      const tbody = document.getElementById('streamsTableBody');
+      if (!streams.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color: var(--text-muted);">គ្មានវីដេអូនៅឡើយទេ</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = streams.map(s => `
+        <tr>
+          <td style="font-weight: 700;">${s.title}</td>
+          <td>${s.authorName}</td>
+          <td><span class="badge badge-admin">${s.category || 'trending'}</span></td>
+          <td>${s.viewsCount} ទស្សនា · ${s.likesCount} Likes</td>
+          <td>
+            <div class="btn-group">
+              <a href="${s.videoUrl}" target="_blank" class="btn-action" style="color:var(--accent); text-decoration:none;">ទស្សនា</a>
+              <button class="btn-action btn-danger" onclick="deleteStream('${s.id}')">លុប</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function deleteStream(streamId) {
+      if (!confirm('តើអ្នកចង់លុបវីដេអូ Stream នេះមែនទេ?')) return;
+      try {
+        const res = await fetch(`/api/v1/streams/${streamId}?userId=admin-1`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        if (res.ok) {
+          loadStreams();
+          loadStats();
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការលុប Stream');
+      }
+    }
+
+    async function loadStories() {
+      try {
+        const res = await fetch('/api/v1/stories');
+        const data = await res.json();
+        currentStories = data.data || data || [];
+        renderStories(currentStories);
+      } catch (err) {
+        console.error('Stories error:', err);
+      }
+    }
+
+    function renderStories(stories) {
+      const tbody = document.getElementById('storiesTableBody');
+      if (!stories.length) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 20px; color: var(--text-muted);">គ្មាន Story នៅឡើយទេ</td></tr>';
+        return;
+      }
+      tbody.innerHTML = stories.map(st => `
+        <tr>
+          <td>
+            <div class="user-cell">
+              <img class="user-img" src="${st.author?.avatar || '/default_avatar.svg'}" onerror="this.src='/default_avatar.svg'" />
+              <span>${st.author?.name || 'User'}</span>
+            </div>
+          </td>
+          <td>${st.caption || st.title || '(No caption)'}</td>
+          <td><a href="${st.imageUrl || st.coverUrl}" target="_blank" style="color:var(--accent); font-size:12px;">បើកមើលរូបភាព/វីដេអូ</a></td>
+          <td>
+            <button class="btn-action btn-danger" onclick="deleteStory('${st.id}')">លុប Story</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function deleteStory(storyId) {
+      if (!confirm('តើអ្នកចង់លុប Story នេះមែនទេ?')) return;
+      try {
+        const res = await fetch(`/api/v1/stories/${storyId}?userId=admin-1`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        if (res.ok) {
+          loadStories();
+          loadStats();
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការលុប Story');
+      }
+    }
+  </script>
+</body>
+</html>
+

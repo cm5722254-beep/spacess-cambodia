@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="spaces_mobile">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>spaces_mobile</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Google OAuth Client Configuration -->
+  <meta name="google-signin-client_id" content="638821712415-0in151dnqcj3e0d1ookul4ii0nv3q9b1.apps.googleusercontent.com">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script>
+    window.googleClientId = "638821712415-0in151dnqcj3e0d1ookul4ii0nv3q9b1.apps.googleusercontent.com";
+
+    // Handle OAuth trigger from Flutter Web
+    window.addEventListener('trigger-google-oauth', function() {
+      try {
+        if (typeof google !== 'undefined' && google.accounts && google.accounts.oauth2) {
+          const client = google.accounts.oauth2.initTokenClient({
+            client_id: window.googleClientId,
+            scope: 'email profile openid',
+            callback: async function(tokenResponse) {
+              if (tokenResponse && tokenResponse.access_token) {
+                try {
+                  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { 'Authorization': 'Bearer ' + tokenResponse.access_token }
+                  });
+                  const profile = await res.json();
+                  window.dispatchEvent(new CustomEvent('google-oauth-success', { detail: JSON.stringify(profile) }));
+                } catch (err) {
+                  window.dispatchEvent(new CustomEvent('google-oauth-error', { detail: err.message || 'Fetch user info error' }));
+                }
+              } else {
+                window.dispatchEvent(new CustomEvent('google-oauth-error', { detail: 'Token cancelled' }));
+              }
+            },
+            error_callback: function(err) {
+              window.dispatchEvent(new CustomEvent('google-oauth-error', { detail: err.message || 'Google OAuth closed' }));
+            }
+          });
+          client.requestAccessToken();
+        } else {
+          window.dispatchEvent(new CustomEvent('google-oauth-error', { detail: 'GIS_NOT_READY' }));
+        }
+      } catch (e) {
+        window.dispatchEvent(new CustomEvent('google-oauth-error', { detail: e.message || 'OAuth error' }));
+      }
+    });
+
+    // Spaces Messenger Web Audio Voice Note Recorder (iPhone Safari + Android + Desktop)
+    (function() {
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let audioStream = null;
+      let recordStartMs = 0;
+      let isCancelled = false;
+
+      window.addEventListener('trigger-voice-start', async function() {
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            window.dispatchEvent(new CustomEvent('voice-record-error', { detail: 'MIC_UNSUPPORTED' }));
+            return;
+          }
+          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mimeCandidates = [
+            'audio/webm;codecs=opus',
+            'audio/webm',
+            'audio/mp4',
+            'audio/ogg;codecs=opus'
+          ];
+          let chosenMime = '';
+          for (const m of mimeCandidates) {
+            if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) {
+              chosenMime = m;
+              break;
+            }
+          }
+          mediaRecorder = chosenMime ? new MediaRecorder(audioStream, { mimeType: chosenMime }) : new MediaRecorder(audioStream);
+          audioChunks = [];
+          isCancelled = false;
+          recordStartMs = Date.now();
+
+          mediaRecorder.ondataavailable = function(e) {
+            if (e.data && e.data.size > 0) {
+              audioChunks.push(e.data);
+            }
+          };
+
+          mediaRecorder.onstop = function() {
+            const elapsedSec = Math.max(1, Math.round((Date.now() - recordStartMs) / 1000));
+            if (audioStream) {
+              audioStream.getTracks().forEach(t => t.stop());
+              audioStream = null;
+            }
+            if (isCancelled || audioChunks.length === 0) {
+              audioChunks = [];
+              return;
+            }
+            const blob = new Blob(audioChunks, { type: chosenMime || mediaRecorder.mimeType || 'audio/webm' });
+            const reader = new FileReader();
+            reader.onloadend = function() {
+              window.dispatchEvent(new CustomEvent('voice-record-complete', {
+                detail: JSON.stringify({
+                  dataUrl: reader.result,
+                  durationSec: elapsedSec
+                })
+              }));
+            };
+            reader.readAsDataURL(blob);
+          };
+
+          mediaRecorder.start(200);
+          window.dispatchEvent(new CustomEvent('voice-record-started'));
+        } catch (err) {
+          window.dispatchEvent(new CustomEvent('voice-record-error', { detail: err.message || 'MIC_PERMISSION_DENIED' }));
+        }
+      });
+
+      window.addEventListener('trigger-voice-stop', function() {
+        try {
+          if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            isCancelled = false;
+            mediaRecorder.stop();
+          }
+        } catch (e) {}
+      });
+
+      window.addEventListener('trigger-voice-cancel', function() {
+        try {
+          isCancelled = true;
+          if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+          } else if (audioStream) {
+            audioStream.getTracks().forEach(t => t.stop());
+            audioStream = null;
+          }
+        } catch (e) {}
+      });
+    })();
+
+    // Real Camera Live Video Broadcast Bridge for Spaces Watch Live
+    (function() {
+      let liveStream = null;
+      let segmentTimer = null;
+      let segmentRecorder = null;
+      let masterRecorder = null;
+      let masterChunks = [];
+      let previewVideoEl = null;
+      let currentStreamId = '';
+      let currentFacing = 'user';
+      let isMicMuted = false;
+      let isStopping = false;
+      let liveStartMs = 0;
+
+      function pickSupportedVideoMime() {
+        const candidates = [
+          'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+          'video/mp4',
+          'video/webm;codecs=vp8,opus',
+          'video/webm;codecs=vp9,opus',
+          'video/webm'
+        ];
+        if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
+          for (const m of candidates) {
+            try {
+              if (MediaRecorder.isTypeSupported(m)) return m;
+            } catch (_) {}
+          }
+        }
+        return '';
+      }
+
+      function capturePosterFrame() {
+        try {
+          if (!previewVideoEl || previewVideoEl.videoWidth <= 0 || previewVideoEl.videoHeight <= 0) return '';
+          const canvas = document.createElement('canvas');
+          const targetW = Math.min(640, previewVideoEl.videoWidth);
+          const targetH = Math.round((targetW / previewVideoEl.videoWidth) * previewVideoEl.videoHeight);
+          canvas.width = targetW;
+          canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return '';
+          ctx.drawImage(previewVideoEl, 0, 0, targetW, targetH);
+          return canvas.toDataURL('image/jpeg', 0.72);
+        } catch (_) {
+          return '';
+        }
+      }
+
+      function formatDuration(ms) {
+        const totalSec = Math.max(1, Math.floor(ms / 1000));
+        const m = String(Math.floor(totalSec / 60)).padStart(2, '0');
+        const s = String(totalSec % 60).padStart(2, '0');
+        return `${m}:${s}`;
+      }
+
+      function attachPreviewStream() {
+        if (!previewVideoEl || !liveStream) return;
+        try {
+          previewVideoEl.srcObject = liveStream;
+          previewVideoEl.muted = true;
+          previewVideoEl.playsInline = true;
+          previewVideoEl.setAttribute('playsinline', 'true');
+          previewVideoEl.setAttribute('webkit-playsinline', 'true');
+          previewVideoEl.style.transform = currentFacing === 'user' ? 'scaleX(-1)' : 'none';
+          const p = previewVideoEl.play();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } catch (_) {}
+      }
+
+      window.spacesRegisterLiveVideoElement = function(el) {
+        previewVideoEl = el;
+        attachPreviewStream();
+      };
+
+      window.addEventListener('register-live-video-el', function() {
+        const el = document.getElementById('spaces-live-preview-video');
+        if (el) {
+          previewVideoEl = el;
+          attachPreviewStream();
+        }
+      });
+
+      async function uploadChunkBlob(blob, mime) {
+        if (!blob || blob.size < 256 || !currentStreamId || isStopping) return;
+        try {
+          const fd = new FormData();
+          const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+          fd.append('chunk', blob, `live_${currentStreamId}.${ext}`);
+          fd.append('mimeType', mime || 'video/webm');
+          const poster = capturePosterFrame();
+          if (poster) fd.append('posterBase64', poster);
+
+          const res = await fetch(`/api/v1/streams/${currentStreamId}/live-chunk`, {
+            method: 'POST',
+            body: fd
+          });
+          if (res.ok) {
+            const payload = await res.json();
+            const data = payload.data || payload;
+            window.dispatchEvent(new CustomEvent('live-chunk-sent', {
+              detail: JSON.stringify({
+                seq: data.seq || 1,
+                viewerCount: data.viewerCount || 1
+              })
+            }));
+          }
+        } catch (_) {}
+      }
+
+      function startSegmentCycle() {
+        if (isStopping || !liveStream || !currentStreamId) return;
+        const mime = pickSupportedVideoMime();
+        const chunks = [];
+        try {
+          segmentRecorder = mime
+            ? new MediaRecorder(liveStream, { mimeType: mime, videoBitsPerSecond: 650000 })
+            : new MediaRecorder(liveStream);
+        } catch (_) {
+          try {
+            segmentRecorder = new MediaRecorder(liveStream);
+          } catch (e) {
+            return;
+          }
+        }
+
+        const effectiveMime = (segmentRecorder && segmentRecorder.mimeType) || mime || 'video/webm';
+        segmentRecorder.ondataavailable = function(ev) {
+          if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+        };
+        segmentRecorder.onstop = function() {
+          if (chunks.length > 0) {
+            const blob = new Blob(chunks, { type: effectiveMime });
+            uploadChunkBlob(blob, effectiveMime);
+          }
+          if (!isStopping && liveStream) {
+            startSegmentCycle();
+          }
+        };
+
+        try {
+          segmentRecorder.start();
+          clearTimeout(segmentTimer);
+          segmentTimer = setTimeout(function() {
+            try {
+              if (segmentRecorder && segmentRecorder.state === 'recording') {
+                segmentRecorder.stop();
+              }
+            } catch (_) {}
+          }, 2400);
+        } catch (_) {}
+      }
+
+      function startMasterRecorder() {
+        if (!liveStream) return;
+        masterChunks = [];
+        const mime = pickSupportedVideoMime();
+        try {
+          masterRecorder = mime
+            ? new MediaRecorder(liveStream, { mimeType: mime, videoBitsPerSecond: 900000 })
+            : new MediaRecorder(liveStream);
+          masterRecorder.ondataavailable = function(ev) {
+            if (ev.data && ev.data.size > 0) masterChunks.push(ev.data);
+          };
+          masterRecorder.start(1000);
+        } catch (_) {
+          masterRecorder = null;
+        }
+      }
+
+      async function acquireCamera(facing) {
+        if (liveStream) {
+          liveStream.getTracks().forEach(t => t.stop());
+          liveStream = null;
+        }
+        try {
+          liveStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: true
+          });
+        } catch (_) {
+          liveStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: facing } },
+            audio: false
+          });
+        }
+        liveStream.getAudioTracks().forEach(t => {
+          t.enabled = !isMicMuted;
+        });
+        attachPreviewStream();
+      }
+
+      window.addEventListener('trigger-live-start', async function(event) {
+        try {
+          const params = JSON.parse((event && event.detail) || '{}');
+          currentStreamId = params.streamId || '';
+          currentFacing = params.facingMode || 'user';
+          isMicMuted = false;
+          isStopping = false;
+          liveStartMs = Date.now();
+
+          await acquireCamera(currentFacing);
+          startMasterRecorder();
+          startSegmentCycle();
+
+          window.dispatchEvent(new CustomEvent('live-broadcast-started', {
+            detail: JSON.stringify({ facingMode: currentFacing })
+          }));
+        } catch (err) {
+          window.dispatchEvent(new CustomEvent('live-broadcast-error', {
+            detail: (err && err.name) || 'CAMERA_ERROR'
+          }));
+        }
+      });
+
+      window.addEventListener('trigger-live-flip', async function() {
+        if (isStopping || !currentStreamId) return;
+        try {
+          currentFacing = currentFacing === 'user' ? 'environment' : 'user';
+          clearTimeout(segmentTimer);
+          try {
+            if (segmentRecorder && segmentRecorder.state === 'recording') segmentRecorder.stop();
+          } catch (_) {}
+          await acquireCamera(currentFacing);
+          startSegmentCycle();
+          window.dispatchEvent(new CustomEvent('live-camera-flipped', {
+            detail: JSON.stringify({ facingMode: currentFacing })
+          }));
+        } catch (err) {
+          window.dispatchEvent(new CustomEvent('live-broadcast-error', {
+            detail: (err && err.name) || 'FLIP_ERROR'
+          }));
+        }
+      });
+
+      window.addEventListener('trigger-live-mute', function() {
+        isMicMuted = !isMicMuted;
+        if (liveStream) {
+          liveStream.getAudioTracks().forEach(t => {
+            t.enabled = !isMicMuted;
+          });
+        }
+        window.dispatchEvent(new CustomEvent('live-mic-toggled', {
+          detail: JSON.stringify({ isMuted: isMicMuted })
+        }));
+      });
+
+      window.addEventListener('trigger-live-stop', async function() {
+        if (isStopping) return;
+        isStopping = true;
+        clearTimeout(segmentTimer);
+        const sid = currentStreamId;
+        const durationText = formatDuration(Date.now() - liveStartMs);
+        const finalPoster = capturePosterFrame();
+
+        try {
+          if (segmentRecorder && segmentRecorder.state === 'recording') {
+            segmentRecorder.stop();
+          }
+        } catch (_) {}
+
+        await new Promise((resolve) => {
+          if (masterRecorder && masterRecorder.state === 'recording') {
+            const origOnStop = masterRecorder.onstop;
+            masterRecorder.onstop = function(ev) {
+              if (typeof origOnStop === 'function') origOnStop.call(this, ev);
+              resolve();
+            };
+            try {
+              masterRecorder.stop();
+            } catch (_) {
+              resolve();
+            }
+            setTimeout(resolve, 1500);
+          } else {
+            resolve();
+          }
+        });
+
+        if (liveStream) {
+          liveStream.getTracks().forEach(t => t.stop());
+          liveStream = null;
+        }
+        if (previewVideoEl) {
+          try {
+            previewVideoEl.srcObject = null;
+          } catch (_) {}
+        }
+
+        let endedPayload = { id: sid, duration: durationText };
+        if (sid) {
+          try {
+            const fd = new FormData();
+            fd.append('duration', durationText);
+            if (finalPoster) fd.append('posterBase64', finalPoster);
+            if (masterChunks.length > 0) {
+              const mime = (masterRecorder && masterRecorder.mimeType) || 'video/webm';
+              const vodBlob = new Blob(masterChunks, { type: mime });
+              if (vodBlob.size > 512) {
+                const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+                fd.append('replay', vodBlob, `vod_${sid}.${ext}`);
+              }
+            }
+            const res = await fetch(`/api/v1/streams/${sid}/end`, {
+              method: 'POST',
+              body: fd
+            });
+            if (res.ok) {
+              const json = await res.json();
+              endedPayload = (json.data && json.data.stream) || json.stream || endedPayload;
+            }
+          } catch (_) {}
+        }
+
+        currentStreamId = '';
+        masterChunks = [];
+        masterRecorder = null;
+        segmentRecorder = null;
+
+        window.dispatchEvent(new CustomEvent('live-broadcast-ended', {
+          detail: JSON.stringify(endedPayload)
+        }));
+      });
+    })();
+  </script>
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
