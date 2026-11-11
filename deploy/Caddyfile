@@ -1,0 +1,33 @@
+# Spaces Platform Caddy Reverse Proxy Configuration
+
+# Production domain (or localhost for local testing)
+{$DOMAIN:localhost} {
+    # Encode responses using modern gzip and zstd
+    encode zstd gzip
+
+    # API and WebSocket routes forwarded to NestJS
+    handle /api/* {
+        reverse_proxy backend:3000
+    }
+
+    handle /socket.io/* {
+        reverse_proxy backend:3000
+    }
+
+    # Public storage routes forwarded to MinIO
+    handle /storage/* {
+        uri strip_prefix /storage
+        reverse_proxy minio:9000
+    }
+
+    # Default fallback
+    handle {
+        respond "Spaces Social Platform API Gateway is Active." 200
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}
+
