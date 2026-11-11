@@ -1,0 +1,14 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    deprecated_member_use: ignore
+  exclude:
+    - "build/**"
+
+linter:
+  rules:
+    prefer_const_constructors: false
+    prefer_const_declarations: false
+    avoid_print: false
+    use_key_in_widget_constructors: true
