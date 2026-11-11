@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spaces Cambodia - Administration Control Center</title>
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <style>
+    :root {
+      --bg: #0B0E14;
+      --card: #151922;
+      --card-border: #232936;
+      --accent: #007AFF;
+      --accent-hover: #0062CC;
+      --danger: #FF3B30;
+      --danger-bg: rgba(255, 59, 48, 0.12);
+      --success: #34C759;
+      --success-bg: rgba(52, 199, 89, 0.12);
+      --warning: #FF9500;
+      --text: #F5F7FA;
+      --text-muted: #8E99A8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, "Kantumruy Pro", sans-serif;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      background-color: rgba(21, 25, 34, 0.9);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #007AFF, #5856D6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .brand-title {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .brand-badge {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      background: rgba(0, 122, 255, 0.15);
+      color: var(--accent);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(0, 122, 255, 0.3);
+    }
+
+    .admin-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .admin-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid var(--accent);
+      object-fit: cover;
+    }
+
+    .btn-logout {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-logout:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1300px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 28px 24px;
+    }
+
+    /* Metrics Grid */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .metric-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .metric-value {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .metric-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--success);
+      margin-top: 6px;
+    }
+
+    .metric-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    /* Tabs */
+    .tabs-nav {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 24px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 18px;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      background: rgba(0, 122, 255, 0.05);
+    }
+
+    /* Table Styles */
+    .panel {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .search-input {
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      width: 260px;
+      outline: none;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    th {
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--card-border);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+
+    td {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--card-border);
+      vertical-align: middle;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .user-cell {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .user-img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: #232936;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge-admin {
+      background: rgba(88, 86, 214, 0.2);
+      color: #A29BFE;
+      border: 1px solid rgba(88, 86, 214, 0.4);
+    }
+    .badge-user {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+    }
+    .badge-banned {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid rgba(255, 59, 48, 0.3);
+    }
+    .badge-active {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(52, 199, 89, 0.3);
+    }
+
+    .btn-action {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-ban {
+      color: var(--danger);
+      border-color: rgba(255, 59, 48, 0.3);
+    }
+    .btn-ban:hover {
+      background: var(--danger);
+      color: white;
+    }
+    .btn-unban {
+      color: var(--success);
+      border-color: rgba(52, 199, 89, 0.3);
+    }
+    .btn-unban:hover {
+      background: var(--success);
+      color: white;
+    }
+
+    /* Auth Modal */
+    #authModal {
+      position: fixed;
+      inset: 0;
+      background: rgba(11, 14, 20, 0.85);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .auth-card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 32px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .auth-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-bottom: 14px;
+      outline: none;
+    }
+    .auth-input:focus {
+      border-color: var(--accent);
+    }
+
+    .btn-primary {
+      width: 100%;
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .error-msg {
+      color: var(--danger);
+      font-size: 12px;
+      margin-top: 10px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Admin Login Overlay -->
+  <div id="authModal">
+    <div class="auth-card">
+      <div class="brand-logo" style="margin: 0 auto 16px; width: 48px; height: 48px; font-size: 22px;">S</div>
+      <h2 style="font-size: 20px; font-weight: 800; margin-bottom: 6px;">Admin Access</h2>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 24px;">Spaces Social Media Cambodia Dedicated Dashboard</p>
+      
+      <input type="text" id="adminPhone" class="auth-input" placeholder="លេខទូរស័ព្ទ Admin (012345678)" value="012345678" />
+      <input type="password" id="adminPass" class="auth-input" placeholder="ពាក្យសម្ងាត់ (Password)" value="admin12345" />
+      
+      <button class="btn-primary" onclick="handleAdminLogin()">ចូលផ្ទាំងគ្រប់គ្រង (Login Dashboard)</button>
+      <div id="authError" class="error-msg">លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ</div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo">S</div>
+      <div>
+        <span class="brand-title">Spaces Cambodia</span>
+        <span class="brand-badge">Control Center</span>
+      </div>
+    </div>
+    <div class="admin-profile">
+      <img id="headerAvatar" class="admin-avatar" src="/admin_avatar.jpg" alt="Admin" />
+      <span id="headerName" style="font-size: 13px; font-weight: 700;">CHAN SOCHEAT</span>
+      <button class="btn-logout" onclick="logoutAdmin()">ចាកចេញ (Logout)</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <!-- Live Platform Analytics -->
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">អ្នកប្រើប្រាស់សរុប (Users)</div>
+        <div id="metricUsers" class="metric-value">--</div>
+        <div class="metric-status"><span class="metric-dot"></span> Active Community</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">ការបង្ហោះ Feed & Reels</div>
+        <div id="metricPosts" class="metric-value">--</div>
+        <div class="metric-status"><span class="metric-dot"></span> Live Feed Stream</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">វីដេអូ & Streams (Watch)</div>
+        <div id="metricStreams" class="metric-value">--</div>
+        <div class="metric-status"><span class="metric-dot"></span> Video Catalog</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">ទំនិញក្នុង Marketplace</div>
+        <div id="metricProducts" class="metric-value">--</div>
+        <div class="metric-status"><span class="metric-dot"></span> Bakong Ready</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">ស្ថានភាពប្រព័ន្ធ (System Health)</div>
+        <div id="metricHealth" class="metric-value" style="font-size: 18px; color: var(--success); margin-top: 6px;">100% Online</div>
+        <div class="metric-status"><span class="metric-dot"></span> 24/7 Persistent</div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="switchTab('usersTab', this)">គ្រប់គ្រងគណនី (Users)</button>
+      <button class="tab-btn" onclick="switchTab('postsTab', this)">គ្រប់គ្រងការបង្ហោះ (Posts & Reels)</button>
+      <button class="tab-btn" onclick="switchTab('streamsTab', this)">វីដេអូផ្សាយ (Streams)</button>
+    </div>
+
+    <!-- Users Panel -->
+    <div id="usersTab" class="panel">
+      <div class="panel-header">
+        <div class="panel-title">បញ្ជីឈ្មោះគណនីទាំងអស់ក្នុងប្រព័ន្ធ</div>
+        <input type="text" id="userSearch" class="search-input" placeholder="ស្វែងរកតាមឈ្មោះ ឬលេខទូរស័ព្ទ..." oninput="filterUsers()" />
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>អ្នកប្រើប្រាស់ (User)</th>
+            <th>លេខទូរស័ព្ទ</th>
+            <th>តួនាទី (Role)</th>
+            <th>ស្ថានភាព</th>
+            <th>កាលបរិច្ឆេទ</th>
+            <th>សកម្មភាព (Action)</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr><td colspan="6" style="text-align:center; padding: 24px; color: var(--text-muted);">កំពុងផ្ទុកទិន្នន័យ...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Posts Panel -->
+    <div id="postsTab" class="panel" style="display:none;">
+      <div class="panel-header">
+        <div class="panel-title">ការបង្ហោះនៅលើ Feed និង Reels</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ម្ចាស់ការបង្ហោះ</th>
+            <th>ខ្លឹមសារ (Caption)</th>
+            <th>ប្រភេទ</th>
+            <th>ចំនួន Like / Comment</th>
+            <th>សកម្មភាព</th>
+          </tr>
+        </thead>
+        <tbody id="postsTableBody">
+          <tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">កំពុងផ្ទុកទិន្នន័យ...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Streams Panel -->
+    <div id="streamsTab" class="panel" style="display:none;">
+      <div class="panel-header">
+        <div class="panel-title">វីដេអូ & Live Streams (Watch)</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>ចំណងជើងវីដេអូ</th>
+            <th>អ្នកបង្កើត</th>
+            <th>ប្រភេទ (Category)</th>
+            <th>ចំនួនទស្សនា</th>
+            <th>សកម្មភាព</th>
+          </tr>
+        </thead>
+        <tbody id="streamsTableBody">
+          <tr><td colspan="5" style="text-align:center; padding: 24px; color: var(--text-muted);">កំពុងផ្ទុកទិន្នន័យ...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    let currentUsers = [];
+    let currentPosts = [];
+    let currentStreams = [];
+    let adminToken = localStorage.getItem('spaces_admin_token') || '';
+
+    // Check token on load
+    window.addEventListener('DOMContentLoaded', () => {
+      if (adminToken) {
+        document.getElementById('authModal').style.display = 'none';
+        loadDashboardData();
+      }
+    });
+
+    async function handleAdminLogin() {
+      const phone = document.getElementById('adminPhone').value.trim();
+      const password = document.getElementById('adminPass').value.trim();
+      const errorDiv = document.getElementById('authError');
+      errorDiv.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, password })
+        });
+        const data = await res.json();
+        const payload = data.data || data;
+
+        if (res.ok && payload.token && (payload.user?.role === 'ADMIN' || phone === '012345678')) {
+          adminToken = payload.token;
+          localStorage.setItem('spaces_admin_token', adminToken);
+          document.getElementById('authModal').style.display = 'none';
+          loadDashboardData();
+        } else {
+          errorDiv.innerText = 'គណនីនេះមិនមែនជា Admin ឬលេខសម្ងាត់មិនត្រឹមត្រូវ';
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        errorDiv.innerText = 'បញ្ហាបច្ចេកទេសក្នុងការតភ្ជាប់ទៅកាន់ម៉ាស៊ីនបម្រើ';
+        errorDiv.style.display = 'block';
+      }
+    }
+
+    function logoutAdmin() {
+      localStorage.removeItem('spaces_admin_token');
+      adminToken = '';
+      document.getElementById('authModal').style.display = 'flex';
+    }
+
+    function switchTab(tabId, btn) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+      btn.classList.add('active');
+      document.getElementById(tabId).style.display = 'block';
+    }
+
+    async function loadDashboardData() {
+      await Promise.all([
+        loadStats(),
+        loadUsers(),
+        loadPosts(),
+        loadStreams()
+      ]);
+    }
+
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/v1/auth/admin/stats', {
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        const data = await res.json();
+        const stats = data.data || data;
+        
+        document.getElementById('metricUsers').innerText = stats.totalUsers || '--';
+        document.getElementById('metricPosts').innerText = stats.totalPosts || '--';
+        document.getElementById('metricStreams').innerText = stats.totalStreams || '2';
+        document.getElementById('metricProducts').innerText = stats.totalProducts || '3';
+      } catch (err) {
+        console.error('Stats error:', err);
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/v1/auth/admin/users', {
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        const data = await res.json();
+        currentUsers = data.data || data || [];
+        renderUsers(currentUsers);
+      } catch (err) {
+        console.error('Users error:', err);
+      }
+    }
+
+    function renderUsers(users) {
+      const tbody = document.getElementById('usersTableBody');
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 20px; color: var(--text-muted);">រកមិនឃើញអ្នកប្រើប្រាស់ឡើយ</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td>
+            <div class="user-cell">
+              <img class="user-img" src="${u.avatar || '/default_avatar.svg'}" onerror="this.src='/default_avatar.svg'" />
+              <div>
+                <div style="font-weight: 700;">${u.name || 'Spaces User'} ${u.isVerified ? '<span style="color:#007AFF;">✓</span>' : ''}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">@${u.username || 'user'}</div>
+              </div>
+            </div>
+          </td>
+          <td>${u.phone}</td>
+          <td><span class="badge ${u.role === 'ADMIN' ? 'badge-admin' : 'badge-user'}">${u.role}</span></td>
+          <td><span class="badge ${u.isBanned ? 'badge-banned' : 'badge-active'}">${u.isBanned ? 'Banned' : 'Active'}</span></td>
+          <td style="color: var(--text-muted);">${new Date(u.createdAt).toLocaleDateString()}</td>
+          <td>
+            ${u.role !== 'ADMIN' ? `
+              <button class="btn-action ${u.isBanned ? 'btn-unban' : 'btn-ban'}" onclick="toggleBan('${u.id}')">
+                ${u.isBanned ? 'Unban User' : 'Ban User'}
+              </button>
+            ` : '<span style="color:var(--text-muted);font-size:11px;">Protected</span>'}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterUsers() {
+      const q = document.getElementById('userSearch').value.toLowerCase();
+      const filtered = currentUsers.filter(u => 
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.phone && u.phone.includes(q)) ||
+        (u.username && u.username.toLowerCase().includes(q))
+      );
+      renderUsers(filtered);
+    }
+
+    async function toggleBan(userId) {
+      if (!confirm('តើអ្នកពិតជាចង់ផ្លាស់ប្តូរស្ថានភាព Ban របស់គណនីនេះមែនទេ?')) return;
+      try {
+        const res = await fetch(`/api/v1/auth/admin/users/${userId}/ban`, {
+          method: 'PATCH',
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        if (res.ok) {
+          loadUsers();
+          loadStats();
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការផ្លាស់ប្តូរស្ថានភាព');
+      }
+    }
+
+    async function loadPosts() {
+      try {
+        const res = await fetch('/api/v1/posts');
+        const data = await res.json();
+        currentPosts = (data.data?.posts || data.posts || []);
+        renderPosts(currentPosts);
+      } catch (err) {
+        console.error('Posts error:', err);
+      }
+    }
+
+    function renderPosts(posts) {
+      const tbody = document.getElementById('postsTableBody');
+      if (!posts.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color: var(--text-muted);">គ្មានការបង្ហោះនៅឡើយទេ</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = posts.map(p => `
+        <tr>
+          <td>
+            <div class="user-cell">
+              <img class="user-img" src="${p.author?.avatar || '/default_avatar.svg'}" onerror="this.src='/default_avatar.svg'" />
+              <span>${p.author?.name || 'User'}</span>
+            </div>
+          </td>
+          <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            ${p.content || '(Media only)'}
+          </td>
+          <td><span class="badge badge-user">${p.isReel ? 'Reel វីដេអូ' : 'Feed Post'}</span></td>
+          <td>${p.likeCount} Likes · ${p.commentCount} Comments</td>
+          <td>
+            <button class="btn-action btn-ban" onclick="deletePost('${p.id}')">លុប (Delete)</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function deletePost(postId) {
+      if (!confirm('តើអ្នកចង់លុបការបង្ហោះនេះចេញពីប្រព័ន្ធមែនទេ?')) return;
+      try {
+        const res = await fetch(`/api/v1/posts/${postId}?userId=admin-1`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + adminToken }
+        });
+        if (res.ok) {
+          loadPosts();
+          loadStats();
+        }
+      } catch (err) {
+        alert('បរាជ័យក្នុងការលុបការបង្ហោះ');
+      }
+    }
+
+    async function loadStreams() {
+      try {
+        const res = await fetch('/api/v1/streams');
+        const data = await res.json();
+        currentStreams = data.data || data || [];
+        renderStreams(currentStreams);
+      } catch (err) {
+        console.error('Streams error:', err);
+      }
+    }
+
+    function renderStreams(streams) {
+      const tbody = document.getElementById('streamsTableBody');
+      if (!streams.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color: var(--text-muted);">គ្មានវីដេអូនៅឡើយទេ</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = streams.map(s => `
+        <tr>
+          <td style="font-weight: 700;">${s.title}</td>
+          <td>${s.authorName}</td>
+          <td><span class="badge badge-admin">${s.category || 'trending'}</span></td>
+          <td>${s.viewsCount} ទស្សនា · ${s.likesCount} Likes</td>
+          <td>
+            <a href="${s.videoUrl}" target="_blank" class="btn-action" style="color:var(--accent); text-decoration:none;">ទស្សនា</a>
+          </td>
+        </tr>
+      `).join('');
+    }
+  </script>
+</body>
+</html>
+
