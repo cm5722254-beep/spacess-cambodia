@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import '../services/theme_service.dart';
 import '../utils/google_auth_helper.dart';
 import '../widgets/liquid_glass.dart';
+import '../widgets/pwa_install_banner.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -126,7 +127,10 @@ class _AuthScreenState extends State<AuthScreen> {
                   children: [
                     // Top Brand Logo & Typography
                     _buildLogoHeader(isDark),
-                    const SizedBox(height: 26),
+                    const SizedBox(height: 20),
+
+                    // PWA Install to Home Screen Prompt (Web & Mobile Browsers)
+                    const PwaInstallBanner(),
 
                     // Liquid Glass Segmented Control (ចូលគណនី / បង្កើតគណនី)
                     LiquidGlassSegmentControl<int>(

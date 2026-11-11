@@ -708,6 +708,46 @@ class ApiService {
     return {};
   }
 
+  String _extractAuthError(dynamic error, String fallback) {
+    if (error is DioException) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode == 502 || statusCode == 503 || statusCode == 504) {
+        return 'ម៉ាស៊ីនបម្រើ (Server) កំពុងមមាញឹក ឬមិនទាន់ឆ្លើយតប សូមព្យាយាមម្តងទៀតបន្តិចក្រោយ';
+      }
+      if (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.sendTimeout) {
+        return 'ការតភ្ជាប់ផុតកំណត់ (Connection Timeout) សូមពិនិត្យមើលអ៊ីនធឺណិត';
+      }
+      if (error.type == DioExceptionType.connectionError) {
+        return 'មិនអាចតភ្ជាប់ទៅកាន់ Server បានទេ សូមពិនិត្យមើលប្រព័ន្ធអ៊ីនធឺណិត';
+      }
+      final data = error.response?.data;
+      if (data is Map) {
+        if (data['error'] is Map && data['error']['message'] != null) {
+          final m = data['error']['message'].toString();
+          if (m.isNotEmpty) return m;
+        }
+        if (data['message'] != null) {
+          final m = data['message'].toString();
+          if (m.isNotEmpty) return m;
+        }
+        if (data['error'] is Map && data['error']['localizedMessage'] != null) {
+          final m = data['error']['localizedMessage'].toString();
+          if (m.isNotEmpty) return m;
+        }
+      }
+      return fallback;
+    }
+    if (error is Map) {
+      if (error['error'] is Map && error['error']['message'] != null) {
+        return error['error']['message'].toString();
+      }
+      if (error['message'] != null) return error['message'].toString();
+    }
+    return fallback;
+  }
+
   // --- AUTHENTICATION & ADMIN API ---
 
   Future<Map<String, dynamic>> login(String phone, String password) async {
@@ -729,12 +769,11 @@ class ApiService {
 
         return {'success': true, 'user': user};
       }
-      return {'success': false, 'message': response.data['message'] ?? 'Login failed'};
+      return {'success': false, 'message': _extractAuthError(response.data, 'លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ')};
     } on DioException catch (e) {
-      final msg = e.response?.data?['message'] ?? 'លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ';
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': _extractAuthError(e, 'លេខទូរស័ព្ទ ឬពាក្យសម្ងាត់មិនត្រឹមត្រូវ')};
     } catch (e) {
-      return {'success': false, 'message': e.toString()};
+      return {'success': false, 'message': _extractAuthError(e, 'មានបញ្ហាបច្ចេកទេសក្នុងការចូលគណនី')};
     }
   }
 
@@ -769,12 +808,11 @@ class ApiService {
 
         return {'success': true, 'user': user};
       }
-      return {'success': false, 'message': response.data['message'] ?? 'Registration failed'};
+      return {'success': false, 'message': _extractAuthError(response.data, 'បរាជ័យក្នុងការចុះឈ្មោះ')};
     } on DioException catch (e) {
-      final msg = e.response?.data?['message'] ?? 'បរាជ័យក្នុងការចុះឈ្មោះ';
-      return {'success': false, 'message': msg};
+      return {'success': false, 'message': _extractAuthError(e, 'បរាជ័យក្នុងការចុះឈ្មោះ')};
     } catch (e) {
-      return {'success': false, 'message': e.toString()};
+      return {'success': false, 'message': _extractAuthError(e, 'មានបញ្ហាបច្ចេកទេសក្នុងការចុះឈ្មោះ')};
     }
   }
 
@@ -808,9 +846,9 @@ class ApiService {
 
         return {'success': true, 'user': user};
       }
-      return {'success': false, 'message': response.data['message'] ?? 'Google sign-in failed'};
+      return {'success': false, 'message': _extractAuthError(response.data, 'Google sign-in failed')};
     } catch (e) {
-      return {'success': false, 'message': e.toString()};
+      return {'success': false, 'message': _extractAuthError(e, 'បរាជ័យក្នុងការចូលតាម Google')};
     }
   }
 

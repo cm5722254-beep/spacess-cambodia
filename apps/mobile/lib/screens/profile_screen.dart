@@ -12,6 +12,7 @@ import '../widgets/create_reel_sheet.dart';
 import '../widgets/media_image_view.dart';
 import '../widgets/vip_subscription_sheet.dart';
 import '../widgets/liquid_glass.dart';
+import '../widgets/pwa_install_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -1076,6 +1077,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       onTap: () {
                         Navigator.pop(ctx);
                         _openStoreSettingsSheet();
+                      },
+                    ),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.device_phone_portrait, color: Color(0xFF007AFF), size: 20),
+                      title: Text(tr('ដំឡើង Spaces លើទូរស័ព្ទ (PWA)', 'Add to Home Screen (PWA)')),
+                      subtitle: Text(tr('ដំណើរការដូច App ពេញលេញលើទូរស័ព្ទ', 'Install on phone Home Screen')),
+                      trailing: const Icon(CupertinoIcons.chevron_right, size: 17),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        PwaInstallSheet.show(context);
                       },
                     ),
                     Container(height: 0.5, color: AppTheme.divider),

@@ -10,6 +10,7 @@ import '../widgets/comments_sheet.dart';
 import '../widgets/story_viewer.dart';
 import '../widgets/media_image_view.dart';
 import '../widgets/liquid_glass.dart';
+import '../widgets/pwa_install_banner.dart';
 import 'chat_screen.dart';
 import 'profile_screen.dart';
 import 'marketplace_screen.dart';
@@ -420,6 +421,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                     ),
                   ),
                 ),
+
+                // PWA Install Pill (Web only, hidden when already installed)
+                const PwaInstallBanner(compact: true),
 
                 // Search toggle
                 CupertinoButton(
