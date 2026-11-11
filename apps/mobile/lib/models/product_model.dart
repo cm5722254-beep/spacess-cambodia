@@ -13,6 +13,10 @@ class ProductModel {
   final String sellerPhone;
   final String sellerAvatar;
   final String? sellerStoreName;
+  final String? sellerStoreDescription;
+  final String? sellerStoreBannerUrl;
+  final String? sellerStoreThemeColor;
+  final String? sellerStoreTagline;
   final String? sellerBakongId;
   final String? createdAt;
 
@@ -31,6 +35,10 @@ class ProductModel {
     required this.sellerPhone,
     required this.sellerAvatar,
     this.sellerStoreName,
+    this.sellerStoreDescription,
+    this.sellerStoreBannerUrl,
+    this.sellerStoreThemeColor,
+    this.sellerStoreTagline,
     this.sellerBakongId,
     this.createdAt,
   });
@@ -54,6 +62,10 @@ class ProductModel {
           ? json['sellerAvatar'].toString()
           : '/default_avatar.svg',
       sellerStoreName: json['sellerStoreName']?.toString(),
+      sellerStoreDescription: json['sellerStoreDescription']?.toString(),
+      sellerStoreBannerUrl: json['sellerStoreBannerUrl']?.toString(),
+      sellerStoreThemeColor: json['sellerStoreThemeColor']?.toString(),
+      sellerStoreTagline: json['sellerStoreTagline']?.toString(),
       sellerBakongId: json['sellerBakongId']?.toString(),
       createdAt: json['createdAt']?.toString(),
     );

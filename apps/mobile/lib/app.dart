@@ -158,6 +158,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
   );
 
   void _openCreateModal() async {
+    ApiService().pauseAllVideos();
     final spaces = await ApiService().fetchSpaces();
     if (mounted) {
       showCupertinoModalPopup(
@@ -165,6 +166,8 @@ class _MainTabScreenState extends State<MainTabScreen> {
         builder: (context) => CreatePostSheet(
           spaces: spaces,
           onPostCreated: (_) {
+            ApiService().activeTabIndexNotifier.value = 0;
+            ApiService().pauseAllVideos();
             setState(() {
               _currentIndex = 0;
             });
@@ -262,6 +265,8 @@ class _MainTabScreenState extends State<MainTabScreen> {
                   final activeNav = _navKeys[_toPageIndex(index)].currentState;
                   activeNav?.popUntil((route) => route.isFirst);
                 } else {
+                  ApiService().activeTabIndexNotifier.value = index;
+                  ApiService().pauseAllVideos();
                   setState(() {
                     _currentIndex = index;
                   });

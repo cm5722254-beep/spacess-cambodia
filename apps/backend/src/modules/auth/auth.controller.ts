@@ -50,18 +50,18 @@ export class AuthController {
   }
 
   private extractUserId(authHeader?: string, bodyUserId?: string): string {
-    if (bodyUserId) return bodyUserId;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
         const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer ', ''), 'base64').toString('utf8'));
         if (decoded && decoded.userId) return decoded.userId;
       } catch (e) {}
     }
+    if (bodyUserId) return bodyUserId;
     return '';
   }
 
   @Patch('profile')
-  @ApiOperation({ summary: 'Update user profile (name, bio, location, avatar)' })
+  @ApiOperation({ summary: 'Update user profile (name, bio, location, avatar, email)' })
   updateProfile(
     @Headers('authorization') authHeader: string,
     @Body()
@@ -71,6 +71,7 @@ export class AuthController {
       bio?: string;
       location?: string;
       avatar?: string;
+      email?: string;
     },
   ) {
     const userId = this.extractUserId(authHeader, body.userId);
@@ -78,7 +79,7 @@ export class AuthController {
   }
 
   @Patch('store')
-  @ApiOperation({ summary: 'Update user store settings (storeName, storePhone, bakongAccountId)' })
+  @ApiOperation({ summary: 'Update user store settings and decoration' })
   updateStore(
     @Headers('authorization') authHeader: string,
     @Body()
@@ -87,6 +88,9 @@ export class AuthController {
       storeName?: string;
       storePhone?: string;
       storeDescription?: string;
+      storeBannerUrl?: string;
+      storeThemeColor?: string;
+      storeTagline?: string;
       bakongAccountId?: string;
     },
   ) {

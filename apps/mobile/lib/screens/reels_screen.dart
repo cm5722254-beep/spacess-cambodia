@@ -22,6 +22,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   final PageController _pageController = PageController();
   List<PostModel> _reels = [];
   bool _isLoading = true;
+  int _activePageIndex = 0;
 
   @override
   void initState() {
@@ -259,14 +260,24 @@ class _ReelsScreenState extends State<ReelsScreen> {
             controller: _pageController,
             scrollDirection: Axis.vertical,
             itemCount: _reels.length,
+            onPageChanged: (pageIdx) {
+              setState(() => _activePageIndex = pageIdx);
+            },
             itemBuilder: (context, index) {
               final reel = _reels[index];
-              return _ReelPageItem(
-                reel: reel,
-                onCommentTap: () {
-                  showCupertinoModalPopup(
-                    context: context,
-                    builder: (ctx) => CommentsSheet(post: reel),
+              return ValueListenableBuilder<int>(
+                valueListenable: _api.activeTabIndexNotifier,
+                builder: (ctx, activeTab, _) {
+                  final isPageActive = activeTab == 1 && _activePageIndex == index;
+                  return _ReelPageItem(
+                    reel: reel,
+                    isActive: isPageActive,
+                    onCommentTap: () {
+                      showCupertinoModalPopup(
+                        context: context,
+                        builder: (ctx) => CommentsSheet(post: reel),
+                      );
+                    },
                   );
                 },
               );
@@ -315,9 +326,14 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
 class _ReelPageItem extends StatefulWidget {
   final PostModel reel;
+  final bool isActive;
   final VoidCallback onCommentTap;
 
-  const _ReelPageItem({required this.reel, required this.onCommentTap});
+  const _ReelPageItem({
+    required this.reel,
+    this.isActive = true,
+    required this.onCommentTap,
+  });
 
   @override
   State<_ReelPageItem> createState() => _ReelPageItemState();
@@ -365,9 +381,11 @@ class _ReelPageItemState extends State<_ReelPageItem> {
           child: isVideo
               ? WebVideoPlayerWidget(
                   videoUrl: videoUrl,
-                  autoPlay: true,
+                  autoPlay: widget.isActive,
+                  isActive: widget.isActive,
                   isLooping: true,
                   showControls: true,
+                  bottomControlsPadding: 84,
                   fit: BoxFit.cover,
                 )
               : Image.network(
@@ -403,7 +421,7 @@ class _ReelPageItemState extends State<_ReelPageItem> {
         // Right Actions Bar (Icons only - Strictly No Emojis!)
         Positioned(
           right: 12,
-          bottom: 112,
+          bottom: 162,
           child: LiquidGlassContainer(
             borderRadius: 28,
             blurSigma: 18,
@@ -483,7 +501,7 @@ class _ReelPageItemState extends State<_ReelPageItem> {
         Positioned(
           left: 12,
           right: 84,
-          bottom: 108,
+          bottom: 158,
           child: LiquidGlassContainer(
             borderRadius: 22,
             blurSigma: 16,

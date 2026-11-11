@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Query, Headers, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { MarketplaceService } from './marketplace.service';
 
@@ -6,6 +6,16 @@ import { MarketplaceService } from './marketplace.service';
 @Controller('marketplace')
 export class MarketplaceController {
   constructor(private readonly marketplaceService: MarketplaceService) {}
+
+  private resolveUserId(authHeader?: string, fallbackId?: string): string {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer ', ''), 'base64').toString('utf8'));
+        if (decoded && decoded.userId) return decoded.userId;
+      } catch (e) {}
+    }
+    return (fallbackId || '').trim();
+  }
 
   @Get('categories')
   @ApiOperation({ summary: 'Get all marketplace product categories' })
@@ -47,9 +57,14 @@ export class MarketplaceController {
   @ApiOperation({ summary: 'Delete a product listing' })
   deleteProduct(
     @Param('id') productId: string,
+    @Headers('authorization') authHeader?: string,
     @Query('userId') userId: string = '',
   ) {
-    const success = this.marketplaceService.deleteProduct(productId, userId);
+    const actingUserId = this.resolveUserId(authHeader, userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const success = this.marketplaceService.deleteProduct(productId, actingUserId);
     return { success };
   }
 

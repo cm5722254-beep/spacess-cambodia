@@ -23,7 +23,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final ApiService _api = ApiService();
   bool hideMetrics = false;
   bool focusMode = false;
-  int _selectedTab = 0; // 0: Settings, 1: My Posts, 2: Saved
+  int _selectedTab = 1; // 1: My Posts (Default), 3: Videos, 2: Saved
 
   List<PostModel> _myPosts = [];
   List<PostModel> _savedPosts = [];
@@ -223,6 +223,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _openEditProfileSheet() {
     final user = _api.currentUser;
     final nameCtrl = TextEditingController(text: user?.name ?? '');
+    final emailCtrl = TextEditingController(text: user?.email ?? '');
     final bioCtrl = TextEditingController(text: user?.bio ?? '');
     final locationCtrl = TextEditingController(text: user?.location ?? 'Phnom Penh, Cambodia');
     final avatarCtrl = TextEditingController(text: user?.avatar ?? '');
@@ -232,7 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setModalState) => Container(
-          height: MediaQuery.of(context).size.height * 0.85,
+          height: MediaQuery.of(context).size.height * 0.88,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           decoration: BoxDecoration(
             color: AppTheme.modalBg,
@@ -272,7 +273,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             setModalState(() => isSaving = true);
                             final updatedUser = await _api.updateProfile(
                               name: nameCtrl.text.trim().isNotEmpty ? nameCtrl.text.trim() : null,
-                              bio: bioCtrl.text.trim().isNotEmpty ? bioCtrl.text.trim() : null,
+                              email: emailCtrl.text.trim(),
+                              bio: bioCtrl.text.trim(),
                               location: locationCtrl.text.trim().isNotEmpty ? locationCtrl.text.trim() : null,
                               avatar: avatarCtrl.text.trim().isNotEmpty ? avatarCtrl.text.trim() : null,
                             );
@@ -282,16 +284,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 setState(() {});
                                 Navigator.of(context, rootNavigator: true).pop();
                               } else {
+                                final errText = _api.lastErrorMessage ??
+                                    tr(
+                                      'លោកអ្នកអាចប្តូរឈ្មោះបានម្តងរៀងរាល់ ៧ ថ្ងៃ ឬអ៊ីមែលមិនត្រឹមត្រូវ។',
+                                      'Name can only be changed every 7 days or email is invalid/in use.',
+                                    );
                                 showCupertinoDialog(
                                   context: context,
                                   builder: (dCtx) => CupertinoAlertDialog(
-                                    title: Text(tr('ដំណឹងប្តូរឈ្មោះ', 'Update Notice')),
+                                    title: Text(tr('ដំណឹងកែសម្រួល', 'Update Notice')),
                                     content: Padding(
                                       padding: const EdgeInsets.only(top: 8.0),
-                                      child: Text(tr(
-                                        'លោកអ្នកអាចប្តូរឈ្មោះបានម្តងរៀងរាល់ ៧ ថ្ងៃ។ លេខសម្ងាត់អាចប្តូរបានគ្រប់ពេល។',
-                                        'Name can only be changed once every 7 days. Password can be changed anytime.',
-                                      )),
+                                      child: Text(errText),
                                     ),
                                     actions: [
                                       CupertinoDialogAction(
@@ -310,7 +314,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
               Expanded(
                 child: ListView(
                   children: [
@@ -329,8 +333,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Expanded(
                             child: Text(
                               tr(
-                                'ឈ្មោះអាចប្តូរបានម្តងរៀងរាល់ ៧ ថ្ងៃ។ លេខសម្ងាត់អាចប្តូរបានគ្រប់ពេល។',
-                                'Name can be changed once every 7 days. Password can be changed anytime.',
+                                'ឈ្មោះអាចប្តូរបានម្តងរៀងរាល់ ៧ ថ្ងៃ។ Bio, អាសយដ្ឋាន, Email & Password ប្តូរបានគ្រប់ពេល។',
+                                'Name can be changed every 7 days. Bio, Address, Email & Password anytime.',
                               ),
                               style: const TextStyle(fontSize: 11, color: Color(0xFF007AFF)),
                             ),
@@ -344,6 +348,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     CupertinoTextField(
                       controller: nameCtrl,
                       placeholder: tr('បញ្ចូលឈ្មោះពេញ', 'Enter full name'),
+                      style: TextStyle(color: AppTheme.primaryText),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.fieldBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.border, width: 0.6),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    Text(tr('អ៊ីមែល (Email)', 'Email Address'),
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
+                    const SizedBox(height: 6),
+                    CupertinoTextField(
+                      controller: emailCtrl,
+                      keyboardType: TextInputType.emailAddress,
+                      placeholder: 'name@example.com',
                       style: TextStyle(color: AppTheme.primaryText),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -371,12 +392,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    Text(tr('ទីតាំង (City / Location)', 'City / Location'),
+                    Text(tr('អាសយដ្ឋាន (Address / Location)', 'Address / Location'),
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
                     const SizedBox(height: 6),
                     CupertinoTextField(
                       controller: locationCtrl,
-                      placeholder: tr('ឧ. ភ្នំពេញ, សៀមរាប, កំពត...', 'e.g. Phnom Penh, Siem Reap...'),
+                      placeholder: tr('ឧ. ផ្ទះលេខ..., ភ្នំពេញ, សៀមរាប...', 'e.g. Street..., Phnom Penh...'),
                       style: TextStyle(color: AppTheme.primaryText),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -386,6 +407,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
+
+                    CupertinoButton(
+                      color: const Color(0xFFFF9500).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      padding: const EdgeInsets.symmetric(vertical: 11),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _openChangePasswordDialog();
+                      },
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(CupertinoIcons.lock_shield_fill, size: 17, color: Color(0xFFFF9500)),
+                          const SizedBox(width: 8),
+                          Text(
+                            tr('ប្តូរពាក្យសម្ងាត់ (Change Password)', 'Change Password'),
+                            style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFFF9500), fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
 
                     // 1-Tap Pick Avatar from Phone
                     CupertinoButton(
@@ -447,152 +490,534 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
     final bakongIdCtrl = TextEditingController(text: user?.bakongAccountId ?? '');
     final storeDescCtrl = TextEditingController(text: user?.storeDescription ?? '');
+    final storeTaglineCtrl = TextEditingController(text: user?.storeTagline ?? '');
+    final storeBannerCtrl = TextEditingController(text: user?.storeBannerUrl ?? '');
+    String selectedColor = (user?.storeThemeColor != null && user!.storeThemeColor!.isNotEmpty)
+        ? user.storeThemeColor!
+        : '#0A84FF';
+
+    const themeColors = [
+      '#0A84FF',
+      '#34C759',
+      '#FF6B00',
+      '#AF52DE',
+      '#D97706',
+      '#E1251B',
+    ];
 
     showCupertinoModalPopup(
       context: context,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(ctx).size.height * 0.85,
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-          top: 16,
-          left: 20,
-          right: 20,
-        ),
-        decoration: BoxDecoration(
-          color: AppTheme.modalBg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.systemGrey4,
-                  borderRadius: BorderRadius.circular(2),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          height: MediaQuery.of(ctx).size.height * 0.88,
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+            top: 16,
+            left: 20,
+            right: 20,
+          ),
+          decoration: BoxDecoration(
+            color: AppTheme.modalBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemGrey4,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      tr('តុបតែងហាង & Bakong Payway', 'Decorate Store & Bakong'),
+                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      child: Text(tr('រក្សាទុក', 'Save'), style: const TextStyle(fontWeight: FontWeight.w700)),
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        final updated = await _api.updateStore(
+                          storeName: storeNameCtrl.text.trim(),
+                          storePhone: storePhoneCtrl.text.trim(),
+                          storeDescription: storeDescCtrl.text.trim(),
+                          storeTagline: storeTaglineCtrl.text.trim(),
+                          storeBannerUrl: storeBannerCtrl.text.trim(),
+                          storeThemeColor: selectedColor,
+                          bakongAccountId: bakongIdCtrl.text.trim(),
+                        );
+                        if (updated != null && mounted) {
+                          setState(() {});
+                        }
+                      },
+                    ),
+                  ],
+                ),
+                Container(height: 0.5, color: AppTheme.divider),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE1251B).withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFFE1251B).withOpacity(0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(CupertinoIcons.qrcode_viewfinder, color: Color(0xFFE1251B), size: 24),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                tr(
+                                  'អតិថិជននឹងឃើញការតុបតែងហាងស្អាតៗ និងស្កេន Bakong KHQR ចូលគណនីអ្នកផ្ទាល់!',
+                                  'Buyers see your decorated storefront and pay directly via Bakong KHQR!',
+                                ),
+                                style: const TextStyle(fontSize: 12, color: Color(0xFFE1251B), height: 1.3),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(tr('ពណ៌តុបតែងហាង (Store Theme Color):', 'Store Theme Color:'),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: themeColors.map((hex) {
+                          final col = Color(int.parse(hex.replaceFirst('#', '0xFF')));
+                          final isSel = selectedColor == hex;
+                          return GestureDetector(
+                            onTap: () => setModalState(() => selectedColor = hex),
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              margin: const EdgeInsets.only(right: 10),
+                              decoration: BoxDecoration(
+                                color: col,
+                                shape: BoxShape.circle,
+                                border: isSel
+                                    ? Border.all(color: AppTheme.primaryText, width: 2.5)
+                                    : null,
+                              ),
+                              child: isSel
+                                  ? const Icon(CupertinoIcons.checkmark, color: CupertinoColors.white, size: 16)
+                                  : null,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(tr('Banner រូបភាពហាង (Store Banner):', 'Store Banner Photo:'),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
+                      const SizedBox(height: 6),
+                      if (storeBannerCtrl.text.isNotEmpty) ...[
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: MediaImageView(
+                            url: storeBannerCtrl.text,
+                            height: 95,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                      CupertinoButton(
+                        color: const Color(0xFF0A84FF).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        onPressed: () async {
+                          final url = await MediaPickerHelper.pickAndUploadMedia(accept: 'image/*');
+                          if (url != null && url.isNotEmpty) {
+                            storeBannerCtrl.text = url;
+                            setModalState(() {});
+                          }
+                        },
+                        child: Text(
+                          tr('ជ្រើសរើស Banner ហាងពីទូរស័ព្ទ', 'Pick Store Banner Photo'),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF0A84FF)),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(tr('ពាក្យស្លោកហាង (Store Tagline):', 'Store Tagline:'),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
+                      const SizedBox(height: 6),
+                      CupertinoTextField(
+                        controller: storeTaglineCtrl,
+                        placeholder: tr('ឧ. ធានាគុណភាព 100% ដឹកជញ្ជូនរហ័ស', 'e.g. Authentic quality, fast delivery'),
+                        style: TextStyle(color: AppTheme.primaryText),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.fieldBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.border, width: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(tr('ឈ្មោះហាងអនឡាញ (Store Name):', 'Store Name:'),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
+                      const SizedBox(height: 6),
+                      CupertinoTextField(
+                        controller: storeNameCtrl,
+                        placeholder: 'ឧ. Davit Tech Store',
+                        style: TextStyle(color: AppTheme.primaryText),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.fieldBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.border, width: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(tr('Bakong Account ID (គណនីបាគងផ្ទាល់ខ្លួន):', 'Your Bakong Account ID:'),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
+                      const SizedBox(height: 6),
+                      CupertinoTextField(
+                        controller: bakongIdCtrl,
+                        placeholder: 'ឧ. username@bkrt (NBC Bakong ID)',
+                        style: TextStyle(color: AppTheme.primaryText),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.fieldBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.border, width: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(tr('លេខទូរស័ព្ទទំនាក់ទំនងហាង (Store Phone):', 'Store Phone:'),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
+                      const SizedBox(height: 6),
+                      CupertinoTextField(
+                        controller: storePhoneCtrl,
+                        placeholder: '012 345 678',
+                        style: TextStyle(color: AppTheme.primaryText),
+                        keyboardType: TextInputType.phone,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.fieldBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.border, width: 0.6),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(tr('ការពិពណ៌នាអំពីហាង (Description):', 'Store Description:'),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
+                      const SizedBox(height: 6),
+                      CupertinoTextField(
+                        controller: storeDescCtrl,
+                        placeholder: tr('លក់ផលិតផលគុណភាពខ្ពស់...', 'Selling quality gadgets...'),
+                        maxLines: 3,
+                        style: TextStyle(color: AppTheme.primaryText),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppTheme.fieldBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppTheme.border, width: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openStoryArchiveSheet() async {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) {
+        return FutureBuilder<List<StoryModel>>(
+          future: _api.fetchStoryArchive(),
+          builder: (ctx, snap) {
+            final items = snap.data ?? [];
+            return LiquidGlassSheet(
+              initialHeightFraction: 0.82,
+              child: Column(
                 children: [
                   Text(
-                    tr('កំណត់ហាង & Bakong Payway', 'Store & Bakong Settings'),
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+                    tr('ប្រវត្តិ Story (Story Archive 24h)', 'Story History & Archive (24h)'),
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.primaryText),
                   ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    child: Text(tr('រក្សាទុក', 'Save'), style: const TextStyle(fontWeight: FontWeight.w700)),
-                    onPressed: () async {
-                      Navigator.pop(ctx);
-                      final updated = await _api.updateStore(
-                        storeName: storeNameCtrl.text.trim(),
-                        storePhone: storePhoneCtrl.text.trim(),
-                        storeDescription: storeDescCtrl.text.trim(),
-                        bakongAccountId: bakongIdCtrl.text.trim(),
-                      );
-                      if (updated != null && mounted) {
-                        setState(() {});
-                      }
-                    },
+                  const SizedBox(height: 6),
+                  Text(
+                    tr(
+                      'Story នឹងបាត់ពី Feed បន្ទាប់ពី 24 ម៉ោង ប៉ុន្តែនៅរក្សាទុកក្នុងប្រវត្តិផ្ទាល់ខ្លួនរបស់អ្នក។',
+                      'Stories expire from active feeds after 24 hours and stay archived here.',
+                    ),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: snap.connectionState == ConnectionState.waiting
+                        ? const Center(child: CupertinoActivityIndicator())
+                        : items.isEmpty
+                            ? Center(
+                                child: Text(
+                                  tr('មិនទាន់មានប្រវត្តិ Story ទេ', 'No archived stories yet'),
+                                  style: TextStyle(color: AppTheme.secondaryText),
+                                ),
+                              )
+                            : StatefulBuilder(
+                                builder: (ctx, setArchState) => ListView.builder(
+                                  itemCount: items.length,
+                                  itemBuilder: (c, idx) {
+                                    final st = items[idx];
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 10),
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.cardBg,
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: AppTheme.border, width: 0.6),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(10),
+                                            child: MediaImageView(
+                                              url: st.imageUrl,
+                                              width: 60,
+                                              height: 60,
+                                              fit: BoxFit.cover,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  st.caption.isNotEmpty ? st.caption : 'Story',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppTheme.primaryText,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: (st.isArchived ? CupertinoColors.systemGrey : const Color(0xFF34C759))
+                                                            .withOpacity(0.15),
+                                                        borderRadius: BorderRadius.circular(6),
+                                                      ),
+                                                      child: Text(
+                                                        st.isArchived ? tr('ផុតកំណត់ 24h', 'Archived (>24h)') : tr('កំពុងបង្ហាញ 24h', 'Active (24h)'),
+                                                        style: TextStyle(
+                                                          fontSize: 10.5,
+                                                          fontWeight: FontWeight.w700,
+                                                          color: st.isArchived ? AppTheme.secondaryText : const Color(0xFF34C759),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),
+                                                    Text(st.timeAgo, style: TextStyle(fontSize: 11, color: AppTheme.tertiaryText)),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          CupertinoButton(
+                                            padding: const EdgeInsets.all(6),
+                                            onPressed: () async {
+                                              final ok = await _api.deleteStory(st.id);
+                                              if (ok) {
+                                                setArchState(() => items.removeAt(idx));
+                                              }
+                                            },
+                                            child: Icon(CupertinoIcons.trash, size: 18, color: AppTheme.accentCrimson),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
                   ),
                 ],
               ),
-              Container(height: 0.5, color: AppTheme.divider),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openSettingsDrawerSheet() {
+    final user = _api.currentUser;
+    final isAdmin = user?.isAdmin ?? false;
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => LiquidGlassSheet(
+          initialHeightFraction: 0.85,
+          child: ListView(
+            children: [
+              Center(
+                child: Text(
+                  tr('ការកំណត់គណនី (Account Settings)', 'Account & Store Settings'),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.primaryText),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppTheme.border, width: 0.8),
+                ),
+                child: Column(
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE1251B).withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE1251B).withOpacity(0.2)),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.bag_fill, color: Color(0xFFE1251B), size: 20),
+                      title: Text(tr('តុបតែងហាង & Bakong Payway', 'Decorate Store & Bakong')),
+                      subtitle: Text(
+                        (user?.storeName != null && user!.storeName!.isNotEmpty)
+                            ? user.storeName!
+                            : tr('កំណត់ហាងអនឡាញរបស់អ្នក', 'Customize your shop & KHQR'),
                       ),
-                      child: Row(
-                        children: [
-                          const Icon(CupertinoIcons.qrcode_viewfinder, color: Color(0xFFE1251B), size: 24),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              tr(
-                                'អតិថិជននឹងស្កេនទូទាត់ប្រាក់ចូលគណនី Bakong របស់អ្នកដោយស្វ័យប្រវត្តិតាមរយៈ Bakong KHQR!',
-                                'Buyers can scan and pay directly into your Bakong account via Bakong KHQR!',
-                              ),
-                              style: const TextStyle(fontSize: 12, color: Color(0xFFE1251B), height: 1.3),
-                            ),
-                          ),
-                        ],
+                      trailing: const Icon(CupertinoIcons.chevron_right, size: 17),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _openStoreSettingsSheet();
+                      },
+                    ),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.clock_fill, color: Color(0xFF0A84FF), size: 20),
+                      title: Text(tr('ប្រវត្តិ Story (Story Archive 24h)', 'Story History Archive')),
+                      subtitle: Text(tr('មើល Story ចាស់ៗដែលផុតកំណត់ 24 ម៉ោង', 'View active & 24h expired stories')),
+                      trailing: const Icon(CupertinoIcons.chevron_right, size: 17),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _openStoryArchiveSheet();
+                      },
+                    ),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.moon_stars_fill, color: Color(0xFF5856D6), size: 20),
+                      title: Text(tr('មុខងាររាត្រី (OLED Night Mode)', 'OLED Night Mode')),
+                      trailing: ValueListenableBuilder<bool>(
+                        valueListenable: _api.isDarkModeNotifier,
+                        builder: (context, isDark, _) => CupertinoSwitch(
+                          value: isDark,
+                          activeColor: const Color(0xFF5856D6),
+                          onChanged: (val) => _api.setThemeMode(val),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(tr('ឈ្មោះហាងអនឡាញ (Store Name):', 'Store Name:'),
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
-                    const SizedBox(height: 6),
-                    CupertinoTextField(
-                      controller: storeNameCtrl,
-                      placeholder: 'ឧ. Davit Tech Store',
-                      style: TextStyle(color: AppTheme.primaryText),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.fieldBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.border, width: 0.6),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.leaf_arrow_circlepath, color: Color(0xFF34C759), size: 20),
+                      title: Text(tr('Focus Mode (Calm Digest)', 'Focus Mode (Calm Digest)')),
+                      trailing: CupertinoSwitch(
+                        value: focusMode,
+                        activeColor: const Color(0xFF34C759),
+                        onChanged: (val) {
+                          _updateFocusMode(val);
+                          setSheetState(() {});
+                        },
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Text(tr('Bakong Account ID (គណនីបាគងផ្ទាល់ខ្លួន):', 'Your Bakong Account ID:'),
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
-                    const SizedBox(height: 6),
-                    CupertinoTextField(
-                      controller: bakongIdCtrl,
-                      placeholder: 'ឧ. username@bkrt (NBC Bakong ID)',
-                      style: TextStyle(color: AppTheme.primaryText),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.fieldBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.border, width: 0.6),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.heart_slash, color: Color(0xFFFF2D55), size: 20),
+                      title: Text(tr('លាក់ចំនួន Like (Hide Metrics)', 'Hide Like Counts')),
+                      trailing: CupertinoSwitch(
+                        value: hideMetrics,
+                        activeColor: const Color(0xFF007AFF),
+                        onChanged: (val) {
+                          _updateHideMetrics(val);
+                          setSheetState(() {});
+                        },
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Text(tr('លេខទូរស័ព្ទទំនាក់ទំនងហាង (Store Phone):', 'Store Phone:'),
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
-                    const SizedBox(height: 6),
-                    CupertinoTextField(
-                      controller: storePhoneCtrl,
-                      placeholder: '012 345 678',
-                      style: TextStyle(color: AppTheme.primaryText),
-                      keyboardType: TextInputType.phone,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.fieldBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.border, width: 0.6),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.lock_shield, color: Color(0xFF007AFF), size: 20),
+                      title: Text(tr('ប្តូរពាក្យសម្ងាត់ (Change Password)', 'Change Password')),
+                      trailing: const Icon(CupertinoIcons.chevron_right, size: 17),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _openChangePasswordDialog();
+                      },
+                    ),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.shield_lefthalf_fill, color: Color(0xFF34C759), size: 20),
+                      title: Text(tr('ការផ្ទៀងផ្ទាត់ 2FA', 'Two-Factor Auth (2FA)')),
+                      trailing: CupertinoSwitch(
+                        value: _api.currentUser?.twoFactorEnabled ?? false,
+                        activeColor: const Color(0xFF34C759),
+                        onChanged: (_) async {
+                          await _api.toggleTwoFactor();
+                          setSheetState(() {});
+                          if (mounted) setState(() {});
+                        },
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Text(tr('ការពិពណ៌នាអំពីហាង (Description):', 'Store Description:'),
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText)),
-                    const SizedBox(height: 6),
-                    CupertinoTextField(
-                      controller: storeDescCtrl,
-                      placeholder: tr('លក់ផលិតផលគុណភាពខ្ពស់...', 'Selling quality gadgets...'),
-                      maxLines: 3,
-                      style: TextStyle(color: AppTheme.primaryText),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.fieldBg,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppTheme.border, width: 0.6),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.arrow_right_square, color: Color(0xFFFF3B30), size: 20),
+                      title: Text(
+                        tr('ចាកចេញពីគណនី (Log Out)', 'Log Out'),
+                        style: const TextStyle(color: Color(0xFFFF3B30), fontWeight: FontWeight.w600),
                       ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _confirmLogout();
+                      },
                     ),
                   ],
                 ),
               ),
+              if (isAdmin) ...[
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 6),
+                  child: Text(
+                    'ADMIN SYSTEM INFRASTRUCTURE (ADMIN ONLY)',
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFFFF9500)),
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBg,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppTheme.border, width: 0.8),
+                  ),
+                  child: CupertinoListTile(
+                    leading: const Icon(CupertinoIcons.flame_fill, color: Color(0xFFFF9500), size: 20),
+                    title: const Text('Firebase Cloud Messaging (FCM)'),
+                    subtitle: Text(tr('បានភ្ជាប់ជោគជ័យ (Admin Access)', 'Status: Connected / Active')),
+                    trailing: const Text(
+                      'ONLINE',
+                      style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF34C759)),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -636,27 +1061,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
       navigationBar: CupertinoNavigationBar(
         backgroundColor: AppTheme.navBarBg,
         middle: Text(
-          tr('គណនី និងការកំណត់', 'Profile & Settings'),
+          tr('គណនីផ្ទាល់ខ្លួន', 'Profile'),
           style: TextStyle(color: AppTheme.primaryText, fontWeight: FontWeight.w700),
         ),
-        trailing: LiquidGlassPressable(
-          onTap: () => LanguageService().toggleLanguage(),
-          child: LiquidGlassContainer(
-            borderRadius: 14,
-            blurSigma: 14,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(CupertinoIcons.globe, size: 14, color: AppTheme.accentBlue),
-                const SizedBox(width: 4),
-                Text(
-                  LanguageService().isKhmer ? 'EN' : 'ខ្មែរ',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.accentBlue),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            LiquidGlassPressable(
+              onTap: () => LanguageService().toggleLanguage(),
+              child: LiquidGlassContainer(
+                borderRadius: 14,
+                blurSigma: 14,
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(CupertinoIcons.globe, size: 14, color: AppTheme.accentBlue),
+                    const SizedBox(width: 4),
+                    Text(
+                      LanguageService().isKhmer ? 'EN' : 'ខ្មែរ',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.accentBlue),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
+            const SizedBox(width: 6),
+            LiquidGlassPressable(
+              onTap: _openSettingsDrawerSheet,
+              child: LiquidGlassContainer(
+                borderRadius: 14,
+                blurSigma: 14,
+                padding: const EdgeInsets.all(6),
+                child: Icon(CupertinoIcons.gear_solid, size: 16, color: AppTheme.primaryText),
+              ),
+            ),
+          ],
         ),
       ),
       child: SafeArea(
@@ -808,18 +1248,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                                         ],
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        userPhone.isNotEmpty ? '@$userHandle • $userPhone' : '@$userHandle',
-                                        style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
-                                      ),
-                                    ],
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          userPhone.isNotEmpty ? '@$userHandle • $userPhone' : '@$userHandle',
+                                          style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                                        ),
+                                        if ((user?.location ?? '').isNotEmpty) ...[
+                                          const SizedBox(height: 3),
+                                          Row(
+                                            children: [
+                                              const Icon(CupertinoIcons.location_solid, size: 12, color: Color(0xFF34C759)),
+                                              const SizedBox(width: 4),
+                                              Expanded(
+                                                child: Text(
+                                                  user!.location!,
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF34C759), fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
+
+                          if ((user?.bio ?? '').isNotEmpty) ...[
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                              decoration: BoxDecoration(
+                                color: AppTheme.surfaceBg,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                user!.bio!,
+                                style: TextStyle(fontSize: 13, color: AppTheme.primaryText, height: 1.35),
+                              ),
+                            ),
+                          ],
 
                         // Action Buttons: Edit Profile & VIP Upgrade
                         Row(
@@ -883,29 +1356,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 18),
 
-            // Liquid Glass Sliding Profile Segmented Control Tabs
+            // Liquid Glass Sliding Profile Segmented Control Tabs (Public Profile tabs only)
             LiquidGlassSegmentControl<int>(
               groupValue: _selectedTab,
               items: [
-                LiquidGlassSegmentItem(
-                  value: 0,
-                  label: tr('ការកំណត់', 'Settings'),
-                  icon: CupertinoIcons.slider_horizontal_3,
-                ),
                 LiquidGlassSegmentItem(
                   value: 1,
                   label: tr('ផុសរបស់ខ្ញុំ', 'Posts'),
                   icon: CupertinoIcons.square_grid_2x2,
                 ),
                 LiquidGlassSegmentItem(
-                  value: 2,
-                  label: tr('រក្សាទុក', 'Saved'),
-                  icon: CupertinoIcons.bookmark,
-                ),
-                LiquidGlassSegmentItem(
                   value: 3,
                   label: tr('វីដេអូ', 'Videos'),
                   icon: CupertinoIcons.play_rectangle,
+                ),
+                LiquidGlassSegmentItem(
+                  value: 2,
+                  label: tr('រក្សាទុក', 'Saved'),
+                  icon: CupertinoIcons.bookmark,
                 ),
               ],
               onValueChanged: (val) {
@@ -1081,372 +1549,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                 ),
-            ],
-
-            // Tab 0: Settings & Administration
-            if (_selectedTab == 0) ...[
-              // Features & Store Section
-              Padding(
-                padding: const EdgeInsets.only(left: 6, bottom: 8),
-                child: Text(
-                  tr('មុខងារពិសេស និងហាង (FEATURES & STORE)', 'STORE & EXPERIENCE'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.secondaryText,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppTheme.border, width: 0.8),
-                ),
-                child: Column(
-                  children: [
-                    // Online Store & Bakong
-                    CupertinoListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE1251B).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(CupertinoIcons.bag_fill, color: Color(0xFFE1251B), size: 20),
-                      ),
-                      title: Text(
-                        tr('ហាងអនឡាញ & Bakong Payway', 'Online Store & Bakong Payway'),
-                        style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                      ),
-                      subtitle: Text(
-                        '${(user?.storeName != null && user!.storeName!.isNotEmpty) ? user.storeName! : tr("មិនទាន់កំណត់ហាង", "Store not set")} • ${(user?.bakongAccountId != null && user!.bakongAccountId!.isNotEmpty) ? user.bakongAccountId! : tr("សូមដាក់គណនីបាគង", "Set Bakong ID")}',
-                        style: TextStyle(color: AppTheme.secondaryText),
-                      ),
-                      trailing: const Icon(CupertinoIcons.chevron_right, size: 18, color: CupertinoColors.systemGrey3),
-                      onTap: _openStoreSettingsSheet,
-                    ),
-                    Container(height: 0.5, color: AppTheme.divider),
-
-                    // Night Mode / OLED Pitch Black Dark Theme Switch
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF5856D6).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(CupertinoIcons.moon_stars_fill, color: Color(0xFF5856D6), size: 20),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  tr('មុខងាររាត្រី (Night Mode / OLED Dark)', 'OLED Night Mode'),
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                                ),
-                                Text(
-                                  tr('ប្ដូរផ្ទៃក្រោយខ្មៅងងឹត ការពារភ្នែក និងសន្សំថ្ម', 'Deep pitch-black UI saving battery'),
-                                  style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ValueListenableBuilder<bool>(
-                            valueListenable: _api.isDarkModeNotifier,
-                            builder: (context, isDark, _) {
-                              return CupertinoSwitch(
-                                value: isDark,
-                                activeColor: const Color(0xFF5856D6),
-                                onChanged: (val) {
-                                  _api.setThemeMode(val);
-                                },
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(height: 0.5, color: AppTheme.divider),
-
-                    // Focus Mode Switch
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF34C759).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(CupertinoIcons.leaf_arrow_circlepath, color: Color(0xFF34C759), size: 20),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  tr('Focus Mode (Calm Digest)', 'Focus Mode (Calm Digest)'),
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                                ),
-                                Text(
-                                  tr('គ្មាន Infinite scroll, មានតែ Digest ប្រចាំថ្ងៃ', 'No infinite scroll, daily summary only'),
-                                  style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
-                                ),
-                              ],
-                            ),
-                          ),
-                          CupertinoSwitch(
-                            value: focusMode,
-                            activeColor: const Color(0xFF34C759),
-                            onChanged: _updateFocusMode,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(height: 0.5, color: AppTheme.divider),
-
-                    // Hide Metrics Switch
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF2D55).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(CupertinoIcons.heart_slash, color: Color(0xFFFF2D55), size: 20),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  tr('លាក់ចំនួន Like (Hide Metrics)', 'Hide Like Counts'),
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                                ),
-                                Text(
-                                  tr('កាត់បន្ថយសម្ពាធសង្គម មិនបង្ហាញចំនួន Like', 'Eliminates social vanity pressure'),
-                                  style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
-                                ),
-                              ],
-                            ),
-                          ),
-                          CupertinoSwitch(
-                            value: hideMetrics,
-                            activeColor: const Color(0xFF007AFF),
-                            onChanged: _updateHideMetrics,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Security & Privacy Section
-              Padding(
-                padding: const EdgeInsets.only(left: 6, bottom: 8),
-                child: Text(
-                  tr('សុវត្ថិភាព និងភាពឯកជន (SECURITY & PRIVACY)', 'SECURITY & PRIVACY'),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.secondaryText,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-
-              Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppTheme.border, width: 0.8),
-                ),
-                child: Column(
-                  children: [
-                    // Change Password
-                    CupertinoListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF007AFF).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(CupertinoIcons.lock_shield, color: Color(0xFF007AFF), size: 20),
-                      ),
-                      title: Text(
-                        tr('ប្តូរពាក្យសម្ងាត់ (Change Password)', 'Change Password'),
-                        style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                      ),
-                      subtitle: Text(
-                        tr('ការពារគណនីរបស់អ្នកជាមួយលេខសម្ងាត់ថ្មី', 'Update password securely'),
-                        style: TextStyle(color: AppTheme.secondaryText),
-                      ),
-                      trailing: const Icon(CupertinoIcons.chevron_right, size: 18, color: CupertinoColors.systemGrey3),
-                      onTap: _openChangePasswordDialog,
-                    ),
-                    Container(height: 0.5, color: AppTheme.divider),
-
-                    // Two-Factor Authentication Switch
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF34C759).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(CupertinoIcons.shield_lefthalf_fill, color: Color(0xFF34C759), size: 20),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  tr('ការផ្ទៀងផ្ទាត់ 2-Factor (2FA)', 'Two-Factor Authentication (2FA)'),
-                                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                                ),
-                                Text(
-                                  tr('បន្ថែមស្រទាប់សុវត្ថិភាពខ្ពស់បំផុតលើគណនី', 'Extra security layer for your account'),
-                                  style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
-                                ),
-                              ],
-                            ),
-                          ),
-                          CupertinoSwitch(
-                            value: user?.twoFactorEnabled ?? false,
-                            activeColor: const Color(0xFF34C759),
-                            onChanged: (val) async {
-                              await _api.toggleTwoFactor();
-                              if (mounted) setState(() {});
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(height: 0.5, color: AppTheme.divider),
-
-                    // Language Switcher Tile
-                    CupertinoListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF5856D6).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(CupertinoIcons.globe, color: Color(0xFF5856D6), size: 20),
-                      ),
-                      title: Text(
-                        tr('ប្ដូរភាសា (Language)', 'Language (ភាសា)'),
-                        style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                      ),
-                      subtitle: Text(
-                        LanguageService().isKhmer ? 'ភាសាខ្មែរ (Khmer)' : 'English',
-                        style: TextStyle(color: AppTheme.secondaryText),
-                      ),
-                      trailing: Text(
-                        LanguageService().isKhmer ? 'Switch to EN' : 'ប្ដូរទៅ ខ្មែរ',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF007AFF)),
-                      ),
-                      onTap: () {
-                        LanguageService().toggleLanguage();
-                      },
-                    ),
-                    Container(height: 0.5, color: AppTheme.divider),
-
-                    // Log Out
-                    CupertinoListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF3B30).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Icon(CupertinoIcons.arrow_right_square, color: Color(0xFFFF3B30), size: 20),
-                      ),
-                      title: Text(
-                        tr('ចាកចេញពីគណនី (Log Out)', 'Log Out'),
-                        style: const TextStyle(color: Color(0xFFFF3B30), fontWeight: FontWeight.w600),
-                      ),
-                      subtitle: Text(
-                        tr('ចេញពីគណនីបច្ចុប្បន្នលើឧបករណ៍នេះ', 'Log out of current session'),
-                        style: TextStyle(color: AppTheme.secondaryText),
-                      ),
-                      trailing: const Icon(CupertinoIcons.chevron_right, size: 18, color: CupertinoColors.systemGrey3),
-                      onTap: _confirmLogout,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Firebase Cloud Integration Section
-              Padding(
-                padding: const EdgeInsets.only(left: 6, bottom: 8),
-                child: Text(
-                  tr('ការតភ្ជាប់ FIREBASE (FIREBASE CLOUD INTEGRATION)', 'FIREBASE CLOUD INTEGRATION'),
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFFFF9500),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppTheme.border, width: 0.8),
-                ),
-                child: CupertinoListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF9500).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(CupertinoIcons.flame_fill, color: Color(0xFFFF9500), size: 20),
-                  ),
-                  title: Text(
-                    'Firebase Cloud Messaging (FCM)',
-                    style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                  ),
-                  subtitle: Text(
-                    tr('បានភ្ជាប់ជោគជ័យ (Status: Connected / Active)', 'Status: Connected / Active'),
-                    style: TextStyle(color: AppTheme.secondaryText),
-                  ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF34C759).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Text(
-                      'ONLINE',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF34C759)),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ],
         ),

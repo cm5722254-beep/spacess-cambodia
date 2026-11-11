@@ -430,6 +430,101 @@ class _ProductDetailSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
+                if ((product.sellerStoreBannerUrl ?? '').isNotEmpty ||
+                    (product.sellerStoreTagline ?? '').isNotEmpty ||
+                    (product.sellerStoreDescription ?? '').isNotEmpty) ...[
+                  Builder(
+                    builder: (_) {
+                      Color storeAccent = const Color(0xFF007AFF);
+                      final rawHex = (product.sellerStoreThemeColor ?? '').replaceAll('#', '').trim();
+                      if (rawHex.length == 6) {
+                        final parsed = int.tryParse('FF$rawHex', radix: 16);
+                        if (parsed != null) storeAccent = Color(parsed);
+                      }
+                      final bannerUrl = product.sellerStoreBannerUrl ?? '';
+                      final storeName = (product.sellerStoreName ?? '').isNotEmpty
+                          ? product.sellerStoreName!
+                          : product.sellerName;
+                      final tagline = product.sellerStoreTagline ?? '';
+                      final storeDesc = product.sellerStoreDescription ?? '';
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              storeAccent.withOpacity(0.16),
+                              storeAccent.withOpacity(0.05),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: storeAccent.withOpacity(0.45), width: 1),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (bannerUrl.isNotEmpty)
+                              SizedBox(
+                                height: 96,
+                                width: double.infinity,
+                                child: MediaImageView(
+                                  url: bannerUrl,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(CupertinoIcons.sparkles, size: 15, color: storeAccent),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          storeName,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppTheme.primaryText,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (tagline.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      tagline,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: storeAccent,
+                                      ),
+                                    ),
+                                  ],
+                                  if (storeDesc.isNotEmpty) ...[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      storeDesc,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+
                 // Seller Card
                 Container(
                   padding: const EdgeInsets.all(14),

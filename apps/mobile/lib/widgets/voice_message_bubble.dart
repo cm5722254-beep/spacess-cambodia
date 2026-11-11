@@ -26,6 +26,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   bool _isPlaying = false;
   double _progress = 0.0;
   int _currentSec = 0;
+  double _speed = 1.0;
   StreamSubscription? _timeSub;
   StreamSubscription? _endSub;
 
@@ -71,9 +72,31 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       _audio!.pause();
       setState(() => _isPlaying = false);
     } else {
+      _audio!.playbackRate = _speed;
       _audio!.play();
       setState(() => _isPlaying = true);
     }
+  }
+
+  void _toggleSpeed() {
+    if (_audio == null) return;
+    setState(() {
+      _speed = _speed == 1.0 ? 1.5 : 1.0;
+      _audio!.playbackRate = _speed;
+    });
+  }
+
+  void _seekFraction(double fraction) {
+    if (_audio == null) return;
+    final dur = (_audio!.duration.isNaN || _audio!.duration <= 0)
+        ? (widget.durationSec > 0 ? widget.durationSec.toDouble() : 1.0)
+        : _audio!.duration;
+    final nextTime = (dur * fraction.clamp(0.0, 1.0));
+    _audio!.currentTime = nextTime;
+    setState(() {
+      _progress = fraction.clamp(0.0, 1.0);
+      _currentSec = nextTime.floor();
+    });
   }
 
   String _formatSec(int s) {
@@ -116,24 +139,46 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: List.generate(bars.length, (i) {
             final isLit = i < activeBars || (_isPlaying && i == activeBars);
-            return Container(
-              width: 3,
-              height: bars[i],
-              margin: const EdgeInsets.symmetric(horizontal: 1.5),
-              decoration: BoxDecoration(
-                color: isLit ? fg : bgWave,
-                borderRadius: BorderRadius.circular(2),
+            return GestureDetector(
+              onTap: () => _seekFraction((i + 0.5) / bars.length),
+              child: Container(
+                width: 3,
+                height: bars[i],
+                margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                decoration: BoxDecoration(
+                  color: isLit ? fg : bgWave,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             );
           }),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Text(
           _isPlaying ? _formatSec(_currentSec) : _formatSec(widget.durationSec > 0 ? widget.durationSec : 1),
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
             color: widget.isMe ? CupertinoColors.white.withOpacity(0.9) : AppTheme.secondaryText,
+          ),
+        ),
+        const SizedBox(width: 6),
+        GestureDetector(
+          onTap: _toggleSpeed,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: widget.isMe ? CupertinoColors.white.withOpacity(0.22) : const Color(0xFF007AFF).withOpacity(0.14),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _speed == 1.0 ? '1x' : '1.5x',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: fg,
+              ),
+            ),
           ),
         ),
       ],

@@ -77,6 +77,8 @@ class CommentItem {
   final String avatar;
   final String text;
   final String timeAgo;
+  final String? parentId;
+  final String? replyToAuthor;
 
   CommentItem({
     required this.id,
@@ -85,6 +87,8 @@ class CommentItem {
     required this.avatar,
     required this.text,
     required this.timeAgo,
+    this.parentId,
+    this.replyToAuthor,
   });
 
   factory CommentItem.fromJson(Map<String, dynamic> json) {
@@ -95,6 +99,8 @@ class CommentItem {
       avatar: json['avatar'] ?? '',
       text: json['text'] ?? '',
       timeAgo: json['timeAgo'] ?? '',
+      parentId: json['parentId'],
+      replyToAuthor: json['replyToAuthor'],
     );
   }
 }
@@ -123,6 +129,8 @@ class PostModel {
   final bool isReel;
   final String? videoUrl;
   final String? reelAudioTitle;
+  final String? templateStyle;
+  final String? moodTag;
   final List<String> tags;
   final List<CommentItem> comments;
 
@@ -150,6 +158,8 @@ class PostModel {
     this.isReel = false,
     this.videoUrl,
     this.reelAudioTitle,
+    this.templateStyle,
+    this.moodTag,
     required this.tags,
     required this.comments,
   });
@@ -179,6 +189,8 @@ class PostModel {
       isReel: json['isReel'] ?? false,
       videoUrl: json['videoUrl'],
       reelAudioTitle: json['reelAudioTitle'],
+      templateStyle: json['templateStyle'],
+      moodTag: json['moodTag'],
       tags: (json['tags'] as List<dynamic>?)?.map((t) => t.toString()).toList() ?? [],
       comments: (json['comments'] as List<dynamic>?)
               ?.map((c) => CommentItem.fromJson(c))
@@ -190,34 +202,43 @@ class PostModel {
 
 class StoryModel {
   final String id;
+  final String authorId;
   final String authorName;
   final String authorAvatar;
   final String city;
   final String imageUrl;
   final String caption;
   final String timeAgo;
+  final String? expiresAt;
+  final bool isArchived;
   bool isViewed;
 
   StoryModel({
     required this.id,
+    this.authorId = '',
     required this.authorName,
     required this.authorAvatar,
     required this.city,
     required this.imageUrl,
     required this.caption,
     required this.timeAgo,
+    this.expiresAt,
+    this.isArchived = false,
     this.isViewed = false,
   });
 
   factory StoryModel.fromJson(Map<String, dynamic> json) {
     return StoryModel(
       id: json['id'] ?? '',
+      authorId: json['author']?['id'] ?? '',
       authorName: json['author']?['name'] ?? '',
       authorAvatar: json['author']?['avatar'] ?? '/default_avatar.svg',
       city: json['city'] ?? 'Cambodia',
       imageUrl: json['imageUrl'] ?? json['coverUrl'] ?? '',
       caption: json['caption'] ?? json['title'] ?? '',
       timeAgo: json['timeAgo'] ?? 'ថ្មីៗនេះ',
+      expiresAt: json['expiresAt'],
+      isArchived: json['isArchived'] == true,
       isViewed: json['isViewed'] ?? false,
     );
   }

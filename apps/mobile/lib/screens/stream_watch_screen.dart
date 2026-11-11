@@ -213,8 +213,11 @@ class _StreamWatchScreenState extends State<StreamWatchScreen> {
   void _openGoLiveSetupSheet() {
     final titleCtrl = TextEditingController();
     final descCtrl = TextEditingController();
+    final noticeCtrl = TextEditingController();
     String category = 'entertainment';
     String facingMode = 'user';
+    String liveTheme = 'ocean';
+    String videoFilter = 'normal';
     bool isStarting = false;
     String? errorMsg;
 
@@ -363,6 +366,14 @@ class _StreamWatchScreenState extends State<StreamWatchScreen> {
                         ],
                         onValueChanged: (val) => setSheetState(() => facingMode = val),
                       ),
+                      const SizedBox(height: 16),
+                      _buildLiveCustomEditor(
+                        selectedTheme: liveTheme,
+                        selectedFilter: videoFilter,
+                        noticeCtrl: noticeCtrl,
+                        onThemeChanged: (val) => setSheetState(() => liveTheme = val),
+                        onFilterChanged: (val) => setSheetState(() => videoFilter = val),
+                      ),
                       if (errorMsg != null) ...[
                         const SizedBox(height: 12),
                         Text(
@@ -403,6 +414,9 @@ class _StreamWatchScreenState extends State<StreamWatchScreen> {
                             category: category,
                             duration: 'LIVE',
                             isLive: true,
+                            liveTheme: liveTheme,
+                            pinnedNotice: noticeCtrl.text.trim(),
+                            videoFilter: videoFilter,
                           );
                           if (!ctx.mounted) return;
                           if (created == null) {
@@ -900,15 +914,25 @@ class _StreamWatchScreenState extends State<StreamWatchScreen> {
                     child: Container(
                       color: const Color(0xFF090D16),
                       child: isPlaying
-                          ? (stream.isLive
-                              ? _LiveChunkPlayerView(streamId: stream.id, initialPoster: stream.thumbnailUrl)
-                              : WebVideoPlayerWidget(
-                                  videoUrl: stream.videoUrl,
-                                  autoPlay: true,
-                                  isLooping: true,
-                                  showControls: true,
-                                  fit: BoxFit.contain,
-                                ))
+                          ? Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                stream.isLive
+                                    ? _LiveChunkPlayerView(streamId: stream.id, initialPoster: stream.thumbnailUrl)
+                                    : WebVideoPlayerWidget(
+                                        videoUrl: stream.videoUrl,
+                                        autoPlay: true,
+                                        isLooping: true,
+                                        showControls: true,
+                                        bottomControlsPadding: 42,
+                                        fit: BoxFit.contain,
+                                      ),
+                                if (_videoFilterOverlay(stream.videoFilter ?? 'normal') != Colors.transparent)
+                                  IgnorePointer(
+                                    child: Container(color: _videoFilterOverlay(stream.videoFilter ?? 'normal')),
+                                  ),
+                              ],
+                            )
                           : (thumbUrl.isNotEmpty
                               ? MediaImageView(url: thumbUrl, fit: BoxFit.cover)
                               : Container(
@@ -1147,6 +1171,14 @@ class _StreamWatchScreenState extends State<StreamWatchScreen> {
                     style: TextStyle(fontSize: 12.5, color: AppTheme.secondaryText, height: 1.35),
                   ),
                 ],
+                if ((stream.pinnedNotice ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _buildPinnedNoticeBanner(
+                    stream.pinnedNotice!,
+                    stream.liveTheme ?? 'ocean',
+                    compact: true,
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1226,6 +1258,243 @@ class _StreamWatchScreenState extends State<StreamWatchScreen> {
   }
 }
 
+List<Color> _liveThemeColors(String theme) {
+  switch (theme) {
+    case 'neon':
+      return const [Color(0xFFFF2D55), Color(0xFFAF52DE)];
+    case 'gold':
+      return const [Color(0xFFFF9F0A), Color(0xFFFFD60A)];
+    case 'sunset':
+      return const [Color(0xFFFF5E62), Color(0xFFFF9966)];
+    case 'clean':
+      return const [Color(0x44FFFFFF), Color(0x18FFFFFF)];
+    case 'ocean':
+    default:
+      return const [Color(0xFF007AFF), Color(0xFF00C7BE)];
+  }
+}
+
+Color _videoFilterOverlay(String filter) {
+  switch (filter) {
+    case 'warm':
+      return const Color(0x26FF9F0A);
+    case 'crisp':
+      return const Color(0x2200C7BE);
+    case 'cinema':
+      return const Color(0x3A070B16);
+    case 'normal':
+    default:
+      return Colors.transparent;
+  }
+}
+
+Widget _buildPinnedNoticeBanner(String notice, String theme, {bool compact = false}) {
+  final colors = _liveThemeColors(theme);
+  return Container(
+    width: double.infinity,
+    padding: EdgeInsets.symmetric(horizontal: compact ? 10 : 12, vertical: compact ? 6 : 8),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [
+          colors.first.withValues(alpha: 0.22),
+          colors.last.withValues(alpha: 0.16),
+        ],
+      ),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: colors.first.withValues(alpha: 0.55), width: 0.9),
+    ),
+    child: Row(
+      children: [
+        Icon(CupertinoIcons.pin_fill, size: compact ? 13 : 14, color: colors.first),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            notice,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: compact ? 11.5 : 12.5,
+              fontWeight: FontWeight.w700,
+              shadows: const [Shadow(color: Colors.black54, blurRadius: 4)],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildLiveCustomEditor({
+  required String selectedTheme,
+  required String selectedFilter,
+  required TextEditingController noticeCtrl,
+  required ValueChanged<String> onThemeChanged,
+  required ValueChanged<String> onFilterChanged,
+}) {
+  final themes = const [
+    {'id': 'ocean', 'km': 'Ocean Blue', 'en': 'Ocean'},
+    {'id': 'neon', 'km': 'Neon Pink', 'en': 'Neon'},
+    {'id': 'gold', 'km': 'Gold VIP', 'en': 'Gold'},
+    {'id': 'sunset', 'km': 'Sunset', 'en': 'Sunset'},
+    {'id': 'clean', 'km': 'ធម្មតា', 'en': 'Clean'},
+  ];
+  final filters = const [
+    {'id': 'normal', 'km': 'ធម្មតា', 'en': 'Natural'},
+    {'id': 'warm', 'km': 'ពន្លឺកក់ក្ដៅ', 'en': 'Warm'},
+    {'id': 'crisp', 'km': 'ត្រជាក់ភ្លឺ', 'en': 'Crisp'},
+    {'id': 'cinema', 'km': 'ភាពយន្ត', 'en': 'Cinema'},
+  ];
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        tr('សារប្រកាស / ប្រូម៉ូសិនលើ Live (Pinned Banner)', 'Pinned Notice / Promo Banner'),
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+      ),
+      const SizedBox(height: 6),
+      CupertinoTextField(
+        controller: noticeCtrl,
+        placeholder: tr('ឧ. បញ្ចុះតម្លៃ 30% ថ្ងៃនេះ! កម្ម៉ង់ឥឡូវ...', 'e.g. 30% OFF today! Order in comments...'),
+        padding: const EdgeInsets.all(12),
+        style: TextStyle(color: AppTheme.primaryText, fontSize: 13.5),
+        decoration: BoxDecoration(
+          color: AppTheme.fieldBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.border, width: 0.7),
+        ),
+      ),
+      const SizedBox(height: 14),
+      Text(
+        tr('ពណ៌រចនាស៊ុម Live (Live Theme)', 'Live Frame Theme'),
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: themes.map((t) {
+          final id = t['id']!;
+          final colors = _liveThemeColors(id);
+          final isSel = selectedTheme == id;
+          return GestureDetector(
+            onTap: () => onThemeChanged(id),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isSel
+                      ? colors
+                      : [AppTheme.fieldBg, AppTheme.fieldBg],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: isSel ? colors.first : AppTheme.border,
+                  width: isSel ? 1.4 : 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: colors),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    tr(t['km']!, t['en']!),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: isSel ? Colors.white : AppTheme.primaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+      const SizedBox(height: 14),
+      Text(
+        tr('តម្រងពណ៌វីដេអូ (Camera Filter)', 'Video Color Filter'),
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: filters.map((f) {
+          final id = f['id']!;
+          return LiquidGlassPill(
+            label: tr(f['km']!, f['en']!),
+            isSelected: selectedFilter == id,
+            onTap: () => onFilterChanged(id),
+          );
+        }).toList(),
+      ),
+    ],
+  );
+}
+
+List<Map<String, dynamic>> _organizeStreamComments(List<Map<String, dynamic>> raw) {
+  final parentById = <String, String>{};
+  for (final c in raw) {
+    final id = c['id']?.toString() ?? '';
+    final parent = c['parentId']?.toString() ?? '';
+    if (id.isNotEmpty && parent.isNotEmpty) {
+      parentById[id] = parent;
+    }
+  }
+
+  String findRootId(String startId) {
+    var cur = startId;
+    final visited = <String>{};
+    while (parentById.containsKey(cur) && !visited.contains(cur)) {
+      visited.add(cur);
+      cur = parentById[cur]!;
+    }
+    return cur;
+  }
+
+  final roots = <Map<String, dynamic>>[];
+  final repliesByRoot = <String, List<Map<String, dynamic>>>{};
+
+  for (final c in raw) {
+    final parent = c['parentId']?.toString() ?? '';
+    if (parent.isEmpty) {
+      roots.add(c);
+    } else {
+      final rootId = findRootId(parent);
+      repliesByRoot.putIfAbsent(rootId, () => []).add(c);
+    }
+  }
+
+  final out = <Map<String, dynamic>>[];
+  final placedRoots = <String>{};
+  for (final r in roots) {
+    out.add({'comment': r, 'isReply': false});
+    final rid = r['id']?.toString() ?? '';
+    placedRoots.add(rid);
+    for (final reply in repliesByRoot[rid] ?? const <Map<String, dynamic>>[]) {
+      out.add({'comment': reply, 'isReply': true});
+    }
+  }
+  for (final entry in repliesByRoot.entries) {
+    if (!placedRoots.contains(entry.key)) {
+      for (final reply in entry.value) {
+        out.add({'comment': reply, 'isReply': true});
+      }
+    }
+  }
+  return out;
+}
+
 /// Broadcaster fullscreen camera modal with real getUserMedia capture, flip/mute, live viewer & comment overlay, and VOD replay saving.
 class _GoLiveCameraModal extends StatefulWidget {
   final StreamModel stream;
@@ -1248,6 +1517,11 @@ class _GoLiveCameraModalState extends State<_GoLiveCameraModal> {
 
   late String _previewViewId;
   late String _facingMode;
+  late String _liveTheme = widget.stream.liveTheme ?? 'ocean';
+  late String _pinnedNotice = widget.stream.pinnedNotice ?? '';
+  late String _videoFilter = widget.stream.videoFilter ?? 'normal';
+  String? _replyToCommentId;
+  String? _replyToAuthorName;
   bool _isMuted = false;
   bool _cameraReady = false;
   bool _isStopping = false;
@@ -1334,13 +1608,98 @@ class _GoLiveCameraModalState extends State<_GoLiveCameraModal> {
   Future<void> _sendHostComment() async {
     final text = _commentCtrl.text.trim();
     if (text.isEmpty) return;
-    _commentCtrl.clear();
-    final created = await _api.addStreamComment(widget.stream.id, text);
+    final replyParentId = _replyToCommentId;
+    setState(() {
+      _commentCtrl.clear();
+      _replyToCommentId = null;
+      _replyToAuthorName = null;
+    });
+    final created = await _api.addStreamComment(
+      widget.stream.id,
+      text,
+      parentId: replyParentId,
+    );
     if (mounted && created != null) {
       setState(() {
         _liveComments = [..._liveComments, created];
       });
     }
+  }
+
+  void _openHostCustomizeSheet() {
+    String draftTheme = _liveTheme;
+    String draftFilter = _videoFilter;
+    final noticeCtrl = TextEditingController(text: _pinnedNotice);
+    bool saving = false;
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => LiquidGlassSheet(
+          initialHeightFraction: 0.62,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: saving ? null : () => Navigator.pop(ctx),
+                    child: Text(tr('បោះបង់', 'Cancel')),
+                  ),
+                  Text(
+                    tr('រចនា Live ផ្ទាល់', 'Customize Live'),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.primaryText),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            setSheetState(() => saving = true);
+                            final nextNotice = noticeCtrl.text.trim();
+                            final updated = await _api.customizeStream(
+                              widget.stream.id,
+                              liveTheme: draftTheme,
+                              pinnedNotice: nextNotice,
+                              videoFilter: draftFilter,
+                            );
+                            if (mounted) {
+                              setState(() {
+                                _liveTheme = updated?.liveTheme ?? draftTheme;
+                                _pinnedNotice = updated?.pinnedNotice ?? nextNotice;
+                                _videoFilter = updated?.videoFilter ?? draftFilter;
+                              });
+                            }
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          },
+                    child: saving
+                        ? const CupertinoActivityIndicator()
+                        : Text(
+                            tr('រក្សាទុក', 'Apply'),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: _buildLiveCustomEditor(
+                    selectedTheme: draftTheme,
+                    selectedFilter: draftFilter,
+                    noticeCtrl: noticeCtrl,
+                    onThemeChanged: (val) => setSheetState(() => draftTheme = val),
+                    onFilterChanged: (val) => setSheetState(() => draftFilter = val),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _finishBroadcast({bool popAfter = true}) async {
@@ -1390,6 +1749,23 @@ class _GoLiveCameraModalState extends State<_GoLiveCameraModal> {
               child: Text(
                 'Web Camera Broadcast only',
                 style: TextStyle(color: CupertinoColors.white),
+              ),
+            ),
+
+          if (_videoFilterOverlay(_videoFilter) != Colors.transparent)
+            IgnorePointer(
+              child: Container(color: _videoFilterOverlay(_videoFilter)),
+            ),
+
+          if (_liveTheme != 'clean')
+            IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: _liveThemeColors(_liveTheme).first.withValues(alpha: 0.7),
+                    width: 3,
+                  ),
+                ),
               ),
             ),
 
@@ -1549,6 +1925,22 @@ class _GoLiveCameraModalState extends State<_GoLiveCameraModal> {
                       ),
                       const Spacer(),
                       LiquidGlassPressable(
+                        onTap: _openHostCustomizeSheet,
+                        child: LiquidGlassContainer(
+                          borderRadius: 20,
+                          padding: const EdgeInsets.all(9),
+                          tintColor: _liveTheme != 'clean'
+                              ? _liveThemeColors(_liveTheme).first.withValues(alpha: 0.65)
+                              : const Color(0x88000000),
+                          child: const Icon(
+                            CupertinoIcons.sparkles,
+                            color: CupertinoColors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      LiquidGlassPressable(
                         onTap: () => LiveBroadcastHelper.flipCamera(),
                         child: LiquidGlassContainer(
                           borderRadius: 20,
@@ -1595,12 +1987,17 @@ class _GoLiveCameraModalState extends State<_GoLiveCameraModal> {
                       ),
                     ),
 
+                  if (_pinnedNotice.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    _buildPinnedNoticeBanner(_pinnedNotice, _liveTheme, compact: true),
+                  ],
+
                   const Spacer(),
 
-                  // Live Comments Overlay (latest 5)
+                  // Live Comments Overlay (tap a comment to reply directly)
                   if (_liveComments.isNotEmpty)
                     SizedBox(
-                      height: 150,
+                      height: 165,
                       child: ListView.separated(
                         reverse: true,
                         physics: const BouncingScrollPhysics(),
@@ -1608,49 +2005,79 @@ class _GoLiveCameraModalState extends State<_GoLiveCameraModal> {
                         separatorBuilder: (_, __) => const SizedBox(height: 6),
                         itemBuilder: (_, idx) {
                           final c = _liveComments[_liveComments.length - 1 - idx];
+                          final cid = c['id']?.toString() ?? '';
+                          final author = c['author']?.toString() ?? 'User';
+                          final replyTo = c['replyToAuthor']?.toString() ?? '';
                           return Align(
                             alignment: Alignment.centerLeft,
-                            child: LiquidGlassContainer(
-                              borderRadius: 16,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                              tintColor: const Color(0x990C111E),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(11),
-                                    child: MediaImageView(
-                                      url: c['avatar']?.toString() ?? '/default_avatar.svg',
-                                      width: 22,
-                                      height: 22,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Flexible(
-                                    child: RichText(
-                                      text: TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: '${c['author'] ?? 'User'}: ',
-                                            style: const TextStyle(
-                                              color: Color(0xFF64D2FF),
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          TextSpan(
-                                            text: c['text']?.toString() ?? '',
-                                            style: const TextStyle(
-                                              color: CupertinoColors.white,
-                                              fontSize: 12.5,
-                                            ),
-                                          ),
-                                        ],
+                            child: GestureDetector(
+                              onTap: cid.isNotEmpty
+                                  ? () {
+                                      setState(() {
+                                        _replyToCommentId = cid;
+                                        _replyToAuthorName = author;
+                                      });
+                                    }
+                                  : null,
+                              child: LiquidGlassContainer(
+                                borderRadius: 16,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                tintColor: const Color(0x990C111E),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(11),
+                                      child: MediaImageView(
+                                        url: c['avatar']?.toString() ?? '/default_avatar.svg',
+                                        width: 22,
+                                        height: 22,
+                                        fit: BoxFit.cover,
                                       ),
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: RichText(
+                                        text: TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: '$author: ',
+                                              style: const TextStyle(
+                                                color: Color(0xFF64D2FF),
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            if (replyTo.isNotEmpty)
+                                              TextSpan(
+                                                text: '@$replyTo ',
+                                                style: const TextStyle(
+                                                  color: Color(0xFFFFD60A),
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            TextSpan(
+                                              text: c['text']?.toString() ?? '',
+                                              style: const TextStyle(
+                                                color: CupertinoColors.white,
+                                                fontSize: 12.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    if (cid.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Icon(
+                                        CupertinoIcons.arrowshape_turn_up_left_fill,
+                                        size: 12,
+                                        color: Colors.white.withValues(alpha: 0.65),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                               ),
                             ),
                           );
@@ -1658,7 +2085,38 @@ class _GoLiveCameraModalState extends State<_GoLiveCameraModal> {
                       ),
                     ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
+
+                  if (_replyToAuthorName != null) ...[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: GestureDetector(
+                        onTap: () => setState(() {
+                          _replyToCommentId = null;
+                          _replyToAuthorName = null;
+                        }),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xCC007AFF),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${tr("កំពុងឆ្លើយតបទៅ", "Replying to")} $_replyToAuthorName',
+                                style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(width: 6),
+                              const Icon(CupertinoIcons.xmark, color: Colors.white, size: 12),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
 
                   // Bottom Host Composer + End Live Action
                   Row(
@@ -1708,6 +2166,7 @@ class _LiveChunkPlayerView extends StatefulWidget {
   final void Function(int seq, int viewers, int likes)? onMetrics;
   final void Function(List<Map<String, dynamic>> comments)? onComments;
   final void Function(String vodUrl)? onStreamEnded;
+  final void Function(String liveTheme, String pinnedNotice, String videoFilter)? onCustomization;
 
   const _LiveChunkPlayerView({
     required this.streamId,
@@ -1715,6 +2174,7 @@ class _LiveChunkPlayerView extends StatefulWidget {
     this.onMetrics,
     this.onComments,
     this.onStreamEnded,
+    this.onCustomization,
   });
 
   @override
@@ -1817,6 +2277,11 @@ class _LiveChunkPlayerViewState extends State<_LiveChunkPlayerView> {
       }
 
       widget.onMetrics?.call(seq, viewers, likes);
+      widget.onCustomization?.call(
+        data['liveTheme']?.toString() ?? 'ocean',
+        data['pinnedNotice']?.toString() ?? '',
+        data['videoFilter']?.toString() ?? 'normal',
+      );
       if (rawComments.isNotEmpty) {
         widget.onComments?.call(
           rawComments.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
@@ -1992,6 +2457,11 @@ class _WatchStreamModalState extends State<_WatchStreamModal> {
   late String _videoUrl;
   late int _likesCount;
   late bool _isLiked;
+  late String _liveTheme = widget.stream.liveTheme ?? 'ocean';
+  late String _pinnedNotice = widget.stream.pinnedNotice ?? '';
+  late String _videoFilter = widget.stream.videoFilter ?? 'normal';
+  String? _replyToCommentId;
+  String? _replyToAuthorName;
   int _viewerCount = 1;
   bool _isPostingComment = false;
   List<Map<String, dynamic>> _comments = [];
@@ -2027,9 +2497,18 @@ class _WatchStreamModalState extends State<_WatchStreamModal> {
   Future<void> _submitComment() async {
     final text = _commentCtrl.text.trim();
     if (text.isEmpty || _isPostingComment) return;
-    setState(() => _isPostingComment = true);
+    final replyParentId = _replyToCommentId;
+    setState(() {
+      _isPostingComment = true;
+      _replyToCommentId = null;
+      _replyToAuthorName = null;
+    });
     _commentCtrl.clear();
-    final created = await _api.addStreamComment(widget.stream.id, text);
+    final created = await _api.addStreamComment(
+      widget.stream.id,
+      text,
+      parentId: replyParentId,
+    );
     if (!mounted) return;
     setState(() {
       _isPostingComment = false;
@@ -2068,46 +2547,75 @@ class _WatchStreamModalState extends State<_WatchStreamModal> {
                   fit: StackFit.expand,
                   children: [
                     Container(
-                      color: const Color(0xFF060912),
-                      child: _isLive
-                          ? _LiveChunkPlayerView(
-                              streamId: widget.stream.id,
-                              initialPoster: widget.stream.thumbnailUrl,
-                              onMetrics: (_, viewers, likes) {
-                                if (!mounted) return;
-                                setState(() {
-                                  _viewerCount = viewers;
-                                  if (likes > _likesCount) _likesCount = likes;
-                                });
-                              },
-                              onComments: (liveList) {
-                                if (mounted && liveList.length >= _comments.length) {
-                                  setState(() => _comments = liveList);
-                                }
-                              },
-                              onStreamEnded: (vodUrl) {
-                                if (!mounted) return;
-                                setState(() {
-                                  _isLive = false;
-                                  _videoUrl = vodUrl;
-                                });
-                                widget.onChanged();
-                              },
-                            )
-                          : (_videoUrl.isNotEmpty
-                              ? WebVideoPlayerWidget(
-                                  videoUrl: _videoUrl,
-                                  autoPlay: true,
-                                  isLooping: false,
-                                  showControls: true,
-                                  fit: BoxFit.contain,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF060912),
+                        border: _liveTheme != 'clean'
+                            ? Border.all(
+                                color: _liveThemeColors(_liveTheme).first.withValues(alpha: 0.65),
+                                width: 2.2,
+                              )
+                            : null,
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          _isLive
+                              ? _LiveChunkPlayerView(
+                                  streamId: widget.stream.id,
+                                  initialPoster: widget.stream.thumbnailUrl,
+                                  onMetrics: (_, viewers, likes) {
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _viewerCount = viewers;
+                                      if (likes > _likesCount) _likesCount = likes;
+                                    });
+                                  },
+                                  onCustomization: (theme, notice, filter) {
+                                    if (!mounted) return;
+                                    if (theme != _liveTheme ||
+                                        notice != _pinnedNotice ||
+                                        filter != _videoFilter) {
+                                      setState(() {
+                                        _liveTheme = theme;
+                                        _pinnedNotice = notice;
+                                        _videoFilter = filter;
+                                      });
+                                    }
+                                  },
+                                  onComments: (liveList) {
+                                    if (mounted && liveList.length >= _comments.length) {
+                                      setState(() => _comments = liveList);
+                                    }
+                                  },
+                                  onStreamEnded: (vodUrl) {
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _isLive = false;
+                                      _videoUrl = vodUrl;
+                                    });
+                                    widget.onChanged();
+                                  },
                                 )
-                              : Center(
-                                  child: Text(
-                                    tr('មិនមានឯកសារវីដេអូសម្រាប់ចាក់ទេ', 'No playable video yet.'),
-                                    style: const TextStyle(color: CupertinoColors.white),
-                                  ),
-                                )),
+                              : (_videoUrl.isNotEmpty
+                                  ? WebVideoPlayerWidget(
+                                      videoUrl: _videoUrl,
+                                      autoPlay: true,
+                                      isLooping: false,
+                                      showControls: true,
+                                      fit: BoxFit.contain,
+                                    )
+                                  : Center(
+                                      child: Text(
+                                        tr('មិនមានឯកសារវីដេអូសម្រាប់ចាក់ទេ', 'No playable video yet.'),
+                                        style: const TextStyle(color: CupertinoColors.white),
+                                      ),
+                                    )),
+                          if (_videoFilterOverlay(_videoFilter) != Colors.transparent)
+                            IgnorePointer(
+                              child: Container(color: _videoFilterOverlay(_videoFilter)),
+                            ),
+                        ],
+                      ),
                     ),
                     Positioned(
                       top: 10,
@@ -2230,6 +2738,10 @@ class _WatchStreamModalState extends State<_WatchStreamModal> {
                           style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
                         ),
                       ],
+                      if (_pinnedNotice.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        _buildPinnedNoticeBanner(_pinnedNotice, _liveTheme, compact: true),
+                      ],
                     ],
                   ),
                 ),
@@ -2254,7 +2766,7 @@ class _WatchStreamModalState extends State<_WatchStreamModal> {
                 ),
               ),
 
-              // Real-Time Comments Feed
+              // Real-Time Threaded Comments Feed
               Expanded(
                 child: _comments.isEmpty
                     ? Center(
@@ -2263,55 +2775,110 @@ class _WatchStreamModalState extends State<_WatchStreamModal> {
                           style: TextStyle(color: AppTheme.secondaryText, fontSize: 13),
                         ),
                       )
-                    : ListView.separated(
-                        physics: const BouncingScrollPhysics(),
-                        padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 12),
-                        itemCount: _comments.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (_, idx) {
-                          final c = _comments[idx];
-                          return LiquidGlassContainer(
-                            borderRadius: 16,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: MediaImageView(
-                                    url: c['avatar']?.toString() ?? '/default_avatar.svg',
-                                    width: 30,
-                                    height: 30,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
+                    : Builder(
+                        builder: (context) {
+                          final threaded = _organizeStreamComments(_comments);
+                          return ListView.separated(
+                            physics: const BouncingScrollPhysics(),
+                            padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 12),
+                            itemCount: threaded.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (_, idx) {
+                              final entry = threaded[idx];
+                              final c = entry['comment'] as Map<String, dynamic>;
+                              final isReply = entry['isReply'] == true;
+                              final cid = c['id']?.toString() ?? '';
+                              final author = c['author']?.toString() ?? 'Spaces User';
+                              final replyTo = c['replyToAuthor']?.toString() ?? '';
+                              return Padding(
+                                padding: EdgeInsets.only(left: isReply ? 28 : 0),
+                                child: LiquidGlassContainer(
+                                  borderRadius: 16,
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                                  child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(
-                                        c['author']?.toString() ?? 'Spaces User',
-                                        style: TextStyle(
-                                          color: AppTheme.primaryText,
-                                          fontSize: 12.5,
-                                          fontWeight: FontWeight.w700,
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(15),
+                                        child: MediaImageView(
+                                          url: c['avatar']?.toString() ?? '/default_avatar.svg',
+                                          width: isReply ? 26 : 30,
+                                          height: isReply ? 26 : 30,
+                                          fit: BoxFit.cover,
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        c['text']?.toString() ?? '',
-                                        style: TextStyle(
-                                          color: AppTheme.primaryText,
-                                          fontSize: 13.5,
-                                          height: 1.35,
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    author,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: AppTheme.primaryText,
+                                                      fontSize: 12.5,
+                                                      fontWeight: FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (replyTo.isNotEmpty) ...[
+                                                  const SizedBox(width: 6),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: AppTheme.accentBlue.withValues(alpha: 0.14),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: Text(
+                                                      '@$replyTo',
+                                                      style: TextStyle(
+                                                        color: AppTheme.accentBlue,
+                                                        fontSize: 10.5,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              c['text']?.toString() ?? '',
+                                              style: TextStyle(
+                                                color: AppTheme.primaryText,
+                                                fontSize: 13.5,
+                                                height: 1.35,
+                                              ),
+                                            ),
+                                            if (cid.isNotEmpty) ...[
+                                              const SizedBox(height: 4),
+                                              GestureDetector(
+                                                onTap: () => setState(() {
+                                                  _replyToCommentId = cid;
+                                                  _replyToAuthorName = author;
+                                                }),
+                                                child: Text(
+                                                  tr('ឆ្លើយតប (Reply)', 'Reply'),
+                                                  style: TextStyle(
+                                                    color: AppTheme.accentBlue,
+                                                    fontSize: 11.5,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           );
                         },
                       ),
@@ -2326,30 +2893,70 @@ class _WatchStreamModalState extends State<_WatchStreamModal> {
                   hPad,
                   10 + viewInsets + MediaQuery.of(context).padding.bottom,
                 ),
-                child: Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: CupertinoTextField(
-                        controller: _commentCtrl,
-                        placeholder: tr('សរសេរមតិយោបល់...', 'Write a comment...'),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        style: TextStyle(color: AppTheme.primaryText, fontSize: 14),
-                        decoration: BoxDecoration(
-                          color: AppTheme.fieldBg,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppTheme.border, width: 0.7),
+                    if (_replyToAuthorName != null) ...[
+                      GestureDetector(
+                        onTap: () => setState(() {
+                          _replyToCommentId = null;
+                          _replyToAuthorName = null;
+                        }),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentBlue.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppTheme.accentBlue.withValues(alpha: 0.35)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '${tr("កំពុងឆ្លើយតបទៅ", "Replying to")} $_replyToAuthorName',
+                                style: TextStyle(
+                                  color: AppTheme.accentBlue,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(CupertinoIcons.xmark, size: 12, color: AppTheme.accentBlue),
+                            ],
+                          ),
                         ),
-                        onSubmitted: (_) => _submitComment(),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    LiquidGlassButton(
-                      label: '',
-                      icon: CupertinoIcons.arrow_up,
-                      borderRadius: 20,
-                      isLoading: _isPostingComment,
-                      padding: const EdgeInsets.all(10),
-                      onPressed: _submitComment,
+                    ],
+                    Row(
+                      children: [
+                        Expanded(
+                          child: CupertinoTextField(
+                            controller: _commentCtrl,
+                            placeholder: _replyToAuthorName != null
+                                ? '${tr("ឆ្លើយតបទៅ", "Reply to")} $_replyToAuthorName...'
+                                : tr('សរសេរមតិយោបល់...', 'Write a comment...'),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            style: TextStyle(color: AppTheme.primaryText, fontSize: 14),
+                            decoration: BoxDecoration(
+                              color: AppTheme.fieldBg,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppTheme.border, width: 0.7),
+                            ),
+                            onSubmitted: (_) => _submitComment(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        LiquidGlassButton(
+                          label: '',
+                          icon: CupertinoIcons.arrow_up,
+                          borderRadius: 20,
+                          isLoading: _isPostingComment,
+                          padding: const EdgeInsets.all(10),
+                          onPressed: _submitComment,
+                        ),
+                      ],
                     ),
                   ],
                 ),

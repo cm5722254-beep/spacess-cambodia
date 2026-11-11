@@ -15,7 +15,15 @@ class ApiService {
   
   final ValueNotifier<UserModel?> authNotifier = ValueNotifier<UserModel?>(null);
   final ValueNotifier<bool> isDarkModeNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<int> activeTabIndexNotifier = ValueNotifier<int>(0);
+  final ValueNotifier<String?> videoPlaybackOwnerNotifier = ValueNotifier<String?>(null);
   String? _token;
+  String? lastErrorMessage;
+
+  void pauseAllVideos({String? exceptId}) {
+    videoPlaybackOwnerNotifier.value =
+        exceptId ?? 'PAUSE_ALL_${DateTime.now().microsecondsSinceEpoch}';
+  }
 
   UserModel? get currentUser => authNotifier.value;
   bool get isAuthenticated => authNotifier.value != null;
@@ -96,6 +104,38 @@ class ApiService {
     return [];
   }
 
+  Future<List<StoryModel>> fetchStoryArchive() async {
+    try {
+      final userId = currentUser?.id;
+      if (userId == null) return [];
+      final response = await _dio.get(
+        '/stories/archive',
+        queryParameters: {'userId': userId},
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final List raw = response.data['data'] ?? [];
+        return raw.map((s) => StoryModel.fromJson(s)).toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching story archive: $e');
+    }
+    return [];
+  }
+
+  Future<bool> deleteStory(String storyId) async {
+    try {
+      final userId = currentUser?.id ?? '';
+      final response = await _dio.delete(
+        '/stories/$storyId',
+        queryParameters: {'userId': userId},
+      );
+      return response.statusCode == 200 && response.data['success'] == true;
+    } catch (e) {
+      debugPrint('Error deleting story: $e');
+    }
+    return false;
+  }
+
   Future<List<PostModel>> fetchFeed({
     String? spaceId,
     bool isDigest = false,
@@ -166,13 +206,14 @@ class ApiService {
     return {};
   }
 
-  Future<CommentItem?> addComment(String postId, String text) async {
+  Future<CommentItem?> addComment(String postId, String text, {String? parentId}) async {
     try {
       final response = await _dio.post(
         '/posts/$postId/comment',
         data: {
           'text': text,
           'authorId': currentUser?.id ?? '',
+          if (parentId != null && parentId.isNotEmpty) 'parentId': parentId,
         },
       );
       if (response.statusCode == 200 && response.data['success'] == true) {
@@ -208,6 +249,8 @@ class ApiService {
     String? circleName,
     String? imageUrl,
     List<String>? tags,
+    String? templateStyle,
+    String? moodTag,
   }) async {
     try {
       final response = await _dio.post(
@@ -220,6 +263,8 @@ class ApiService {
           if (circleName != null) 'circleName': circleName,
           if (imageUrl != null) 'imageUrl': imageUrl,
           if (tags != null) 'tags': tags,
+          if (templateStyle != null && templateStyle.isNotEmpty) 'templateStyle': templateStyle,
+          if (moodTag != null && moodTag.isNotEmpty) 'moodTag': moodTag,
         },
       );
       if (response.statusCode == 200 && response.data['success'] == true) {
@@ -504,6 +549,25 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>?> fetchPublicProfile(String usernameOrId) async {
+    try {
+      final response = await _dio.get(
+        '/auth/users/$usernameOrId',
+        queryParameters: {
+          if (currentUser?.id != null) 'currentUserId': currentUser!.id,
+        },
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        if (response.data['data'] is Map) {
+          return Map<String, dynamic>.from(response.data['data'] as Map);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching public profile: $e');
+    }
+    return null;
+  }
+
   Future<Author?> fetchUserProfile(String username) async {
     try {
       final response = await _dio.get(
@@ -545,7 +609,9 @@ class ApiService {
     String? bio,
     String? location,
     String? avatar,
+    String? email,
   }) async {
+    lastErrorMessage = null;
     try {
       final userId = currentUser?.id;
       if (userId == null) return null;
@@ -557,6 +623,7 @@ class ApiService {
           if (bio != null) 'bio': bio,
           if (location != null) 'location': location,
           if (avatar != null) 'avatar': avatar,
+          if (email != null) 'email': email,
         },
       );
       if (response.statusCode == 200 && response.data['success'] == true) {
@@ -568,6 +635,12 @@ class ApiService {
           return updatedUser;
         }
       }
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map && data['message'] != null) {
+        lastErrorMessage = data['message'].toString();
+      }
+      debugPrint('Error updating profile: $e');
     } catch (e) {
       debugPrint('Error updating profile: $e');
     }
@@ -910,6 +983,9 @@ class ApiService {
     required String storeName,
     required String storePhone,
     String? storeDescription,
+    String? storeBannerUrl,
+    String? storeThemeColor,
+    String? storeTagline,
     required String bakongAccountId,
   }) async {
     try {
@@ -921,7 +997,10 @@ class ApiService {
           'userId': user.id,
           'storeName': storeName,
           'storePhone': storePhone,
-          'storeDescription': storeDescription,
+          if (storeDescription != null) 'storeDescription': storeDescription,
+          if (storeBannerUrl != null) 'storeBannerUrl': storeBannerUrl,
+          if (storeThemeColor != null) 'storeThemeColor': storeThemeColor,
+          if (storeTagline != null) 'storeTagline': storeTagline,
           'bakongAccountId': bakongAccountId,
         },
       );
@@ -1087,6 +1166,49 @@ class ApiService {
     return null;
   }
 
+  /// Uploads binary data (decoded from dataUrl) via multipart /storage/upload-file directly to R2
+  Future<String?> uploadVoiceDataUrl(String dataUrl) async {
+    try {
+      final commaIdx = dataUrl.indexOf(',');
+      if (commaIdx <= 0) {
+        return await uploadMedia(dataUrl, filename: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm');
+      }
+      final header = dataUrl.substring(0, commaIdx);
+      final base64Part = dataUrl.substring(commaIdx + 1);
+      final mimeMatch = RegExp(r'data:([^;]+)').firstMatch(header);
+      final rawMime = (mimeMatch?.group(1) ?? 'audio/webm').toLowerCase();
+      final ext = rawMime.contains('mp4')
+          ? 'm4a'
+          : rawMime.contains('ogg')
+              ? 'ogg'
+              : rawMime.contains('mpeg')
+                  ? 'mp3'
+                  : 'webm';
+      final bytes = base64Decode(base64Part);
+      final fname = 'voice_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final formData = FormData.fromMap({
+        'prefix': 'voice',
+        'filename': fname,
+        'mimeType': rawMime,
+        'file': MultipartFile.fromBytes(bytes, filename: fname),
+      });
+      final response = await _dio.post(
+        '/storage/upload-file',
+        data: formData,
+        options: Options(contentType: 'multipart/form-data'),
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = response.data['data'] ?? response.data;
+        if (data is Map && data['url'] != null) {
+          return data['url'].toString();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error uploading voice binary to R2, falling back to base64: $e');
+    }
+    return await uploadMedia(dataUrl, filename: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm');
+  }
+
   /// Uploads media directly (base64) to server disk storage and returns the live URL (/uploads/media-...)
   Future<String?> uploadMedia(String base64Data, {String? filename}) async {
     try {
@@ -1233,6 +1355,9 @@ class ApiService {
     String? category,
     String? duration,
     bool isLive = false,
+    String? liveTheme,
+    String? pinnedNotice,
+    String? videoFilter,
   }) async {
     try {
       final user = currentUser;
@@ -1247,6 +1372,9 @@ class ApiService {
           'category': category ?? 'trending',
           'duration': duration ?? (isLive ? 'LIVE' : '05:00'),
           'isLive': isLive,
+          if (liveTheme != null) 'liveTheme': liveTheme,
+          if (pinnedNotice != null) 'pinnedNotice': pinnedNotice,
+          if (videoFilter != null) 'videoFilter': videoFilter,
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -1254,6 +1382,34 @@ class ApiService {
       }
     } catch (e) {
       debugPrint('Error creating stream: $e');
+    }
+    return null;
+  }
+
+  Future<StreamModel?> customizeStream(
+    String streamId, {
+    String? liveTheme,
+    String? pinnedNotice,
+    String? videoFilter,
+  }) async {
+    try {
+      final response = await _dio.patch(
+        '/streams/$streamId/customize',
+        data: {
+          'userId': currentUser?.id ?? '',
+          if (liveTheme != null) 'liveTheme': liveTheme,
+          if (pinnedNotice != null) 'pinnedNotice': pinnedNotice,
+          if (videoFilter != null) 'videoFilter': videoFilter,
+        },
+      );
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final raw = response.data['data']?['stream'] ?? response.data['stream'] ?? response.data['data'];
+        if (raw is Map<String, dynamic>) {
+          return StreamModel.fromJson(raw);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error customizing stream: $e');
     }
     return null;
   }
@@ -1306,7 +1462,11 @@ class ApiService {
     return [];
   }
 
-  Future<Map<String, dynamic>?> addStreamComment(String streamId, String text) async {
+  Future<Map<String, dynamic>?> addStreamComment(
+    String streamId,
+    String text, {
+    String? parentId,
+  }) async {
     try {
       final user = currentUser;
       final response = await _dio.post(
@@ -1314,6 +1474,7 @@ class ApiService {
         data: {
           'authorId': user?.id ?? 'admin-1',
           'text': text,
+          if (parentId != null && parentId.isNotEmpty) 'parentId': parentId,
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {

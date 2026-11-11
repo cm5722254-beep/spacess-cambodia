@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  Headers,
+  ForbiddenException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { FeedService } from './feed.service';
 
@@ -7,23 +18,53 @@ import { FeedService } from './feed.service';
 export class FeedController {
   constructor(private readonly feedService: FeedService) {}
 
+  private resolveActingUserId(authHeader?: string, fallbackId?: string): string {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = JSON.parse(
+          Buffer.from(authHeader.replace('Bearer ', ''), 'base64').toString('utf8'),
+        );
+        if (decoded && decoded.userId) return decoded.userId;
+      } catch (e) {}
+    }
+    return (fallbackId || '').trim();
+  }
+
   @Get('stories')
   @ApiOperation({ summary: 'Get active 24h stories' })
   getStories() {
     return this.feedService.getStories();
   }
 
+  @Get('stories/archive')
+  @ApiOperation({ summary: 'Get user story history including 24h expired archive' })
+  getStoryArchive(
+    @Headers('authorization') authHeader?: string,
+    @Query('userId') userId?: string,
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) {
+      return [];
+    }
+    return this.feedService.getStoryArchive(actingUserId);
+  }
+
   @Post('stories')
-  @ApiOperation({ summary: 'Create a new story' })
+  @ApiOperation({ summary: 'Create a new story (24h active lifespan)' })
   createStory(
+    @Headers('authorization') authHeader: string,
     @Body()
     body: {
-      authorId: string;
+      authorId?: string;
       imageUrl: string;
       caption?: string;
     },
   ) {
-    return this.feedService.createStory(body.authorId, body.imageUrl, body.caption);
+    const actingUserId = this.resolveActingUserId(authHeader, body.authorId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.feedService.createStory(actingUserId, body.imageUrl, body.caption);
   }
 
   @Get('reels')
@@ -35,6 +76,7 @@ export class FeedController {
   @Post('reels')
   @ApiOperation({ summary: 'Post a new video reel' })
   createReel(
+    @Headers('authorization') authHeader: string,
     @Body()
     body: {
       authorId?: string;
@@ -43,7 +85,11 @@ export class FeedController {
       audioTitle?: string;
     },
   ) {
-    return this.feedService.createReel(body);
+    const actingUserId = this.resolveActingUserId(authHeader, body.authorId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.feedService.createReel({ ...body, authorId: actingUserId });
   }
 
   @Get('streams')
@@ -59,6 +105,7 @@ export class FeedController {
   @Post('streams')
   @ApiOperation({ summary: 'Publish a new long video or start a stream' })
   createStream(
+    @Headers('authorization') authHeader: string,
     @Body()
     body: {
       authorId?: string;
@@ -69,9 +116,40 @@ export class FeedController {
       category?: string;
       duration?: string;
       isLive?: boolean;
+      liveTheme?: string;
+      pinnedNotice?: string;
+      videoFilter?: string;
     },
   ) {
-    return this.feedService.createStream(body);
+    const actingUserId = this.resolveActingUserId(authHeader, body.authorId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.feedService.createStream({ ...body, authorId: actingUserId });
+  }
+
+  @Patch('streams/:id/customize')
+  @ApiOperation({ summary: 'Customize live theme, pinned banner, or video filter' })
+  customizeStream(
+    @Param('id') streamId: string,
+    @Headers('authorization') authHeader: string,
+    @Body()
+    body: {
+      userId?: string;
+      liveTheme?: string;
+      pinnedNotice?: string;
+      videoFilter?: string;
+    },
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, body.userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const updated = this.feedService.updateStreamCustomizations(streamId, actingUserId, body);
+    if (!updated) {
+      throw new ForbiddenException('Not authorized to customize this stream');
+    }
+    return { success: true, stream: updated };
   }
 
   @Post('streams/:id/like')
@@ -107,8 +185,9 @@ export class FeedController {
   }
 
   @Post('posts')
-  @ApiOperation({ summary: 'Create a new post in a Space with audience circle and city' })
+  @ApiOperation({ summary: 'Create a new post in a Space with audience circle, template, and city' })
   createPost(
+    @Headers('authorization') authHeader: string,
     @Body()
     body: {
       authorId?: string;
@@ -118,27 +197,50 @@ export class FeedController {
       circleName?: string;
       imageUrl?: string;
       tags?: string[];
+      templateStyle?: string;
+      moodTag?: string;
     },
   ) {
-    return this.feedService.createPost(body);
+    const actingUserId = this.resolveActingUserId(authHeader, body.authorId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.feedService.createPost({ ...body, authorId: actingUserId });
   }
 
   @Patch('posts/:id')
-  @ApiOperation({ summary: 'Update an existing post' })
+  @ApiOperation({ summary: 'Update an existing post (Author or Admin only)' })
   updatePost(
     @Param('id') postId: string,
-    @Body() body: { userId: string; content?: string; city?: string; imageUrl?: string },
+    @Headers('authorization') authHeader: string,
+    @Body() body: { userId?: string; content?: string; city?: string; imageUrl?: string },
   ) {
-    return this.feedService.updatePost(postId, body.userId, body);
+    const actingUserId = this.resolveActingUserId(authHeader, body.userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const updated = this.feedService.updatePost(postId, actingUserId, body);
+    if (!updated) {
+      throw new ForbiddenException('Not allowed to edit this post');
+    }
+    return updated;
   }
 
   @Delete('posts/:id')
-  @ApiOperation({ summary: 'Delete a post' })
+  @ApiOperation({ summary: 'Delete a post (Author or Admin only)' })
   deletePost(
     @Param('id') postId: string,
-    @Query('userId') userId: string = 'admin-1',
+    @Headers('authorization') authHeader?: string,
+    @Query('userId') userId: string = '',
   ) {
-    const success = this.feedService.deletePost(postId, userId);
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const success = this.feedService.deletePost(postId, actingUserId);
+    if (!success) {
+      throw new ForbiddenException('Not allowed to delete this post');
+    }
     return { success };
   }
 
@@ -146,56 +248,98 @@ export class FeedController {
   @ApiOperation({ summary: 'Toggle reaction on a post (LIKE, LOVE, HAHA, WOW, SAD)' })
   toggleReaction(
     @Param('id') postId: string,
+    @Headers('authorization') authHeader: string,
     @Body('reaction') reactionType: string = 'LIKE',
-    @Body('userId') userId: string = 'admin-1',
+    @Body('userId') userId: string = '',
   ) {
-    return this.feedService.toggleReaction(postId, userId, reactionType);
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.feedService.toggleReaction(postId, actingUserId, reactionType);
   }
 
   @Post('posts/:id/comment')
-  @ApiOperation({ summary: 'Add a comment to a post' })
+  @ApiOperation({ summary: 'Add a comment or nested reply to a post' })
   addComment(
     @Param('id') postId: string,
+    @Headers('authorization') authHeader: string,
     @Body('text') text: string,
-    @Body('authorId') authorId: string = 'admin-1',
+    @Body('authorId') authorId: string = '',
+    @Body('parentId') parentId?: string,
   ) {
-    return this.feedService.addComment(postId, authorId, text);
+    const actingUserId = this.resolveActingUserId(authHeader, authorId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.feedService.addComment(postId, actingUserId, text, parentId);
   }
 
   @Delete('stories/:id')
-  @ApiOperation({ summary: 'Delete a story (Author or Admin)' })
+  @ApiOperation({ summary: 'Delete a story (Author or Admin only)' })
   deleteStory(
     @Param('id') storyId: string,
-    @Query('userId') userId: string = 'admin-1',
+    @Headers('authorization') authHeader?: string,
+    @Query('userId') userId: string = '',
   ) {
-    const success = this.feedService.deleteStory(storyId, userId);
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const success = this.feedService.deleteStory(storyId, actingUserId);
+    if (!success) {
+      throw new ForbiddenException('Not allowed to delete this story');
+    }
     return { success };
   }
 
   @Delete('streams/:id')
-  @ApiOperation({ summary: 'Delete a video stream (Author or Admin)' })
+  @ApiOperation({ summary: 'Delete a video stream (Author or Admin only)' })
   deleteStream(
     @Param('id') streamId: string,
-    @Query('userId') userId: string = 'admin-1',
+    @Headers('authorization') authHeader?: string,
+    @Query('userId') userId: string = '',
   ) {
-    const success = this.feedService.deleteStream(streamId, userId);
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const success = this.feedService.deleteStream(streamId, actingUserId);
+    if (!success) {
+      throw new ForbiddenException('Not allowed to delete this stream');
+    }
     return { success };
   }
 
   @Post('posts/batch-delete')
   @ApiOperation({ summary: 'Admin: Delete multiple selected posts or reels' })
-  deletePostsBatch(@Body() body: { postIds: string[]; userId?: string }) {
-    const deletedCount = this.feedService.deletePostsBatch(body.postIds || [], body.userId || 'admin-1');
+  deletePostsBatch(
+    @Headers('authorization') authHeader: string,
+    @Body() body: { postIds: string[]; userId?: string },
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, body.userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Admin authentication required');
+    }
+    const deletedCount = this.feedService.deletePostsBatch(body.postIds || [], actingUserId);
     return { success: true, deletedCount };
   }
 
   @Delete('posts/:id/comments/:commentId')
-  @ApiOperation({ summary: 'Delete a comment from a post' })
+  @ApiOperation({ summary: 'Delete a comment from a post (Author or Admin only)' })
   deleteComment(
     @Param('commentId') commentId: string,
-    @Query('userId') userId: string = 'admin-1',
+    @Headers('authorization') authHeader?: string,
+    @Query('userId') userId: string = '',
   ) {
-    const success = this.feedService.deleteComment(commentId, userId);
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const success = this.feedService.deleteComment(commentId, actingUserId);
+    if (!success) {
+      throw new ForbiddenException('Not allowed to delete this comment');
+    }
     return { success };
   }
 
@@ -203,9 +347,14 @@ export class FeedController {
   @ApiOperation({ summary: 'Toggle save / bookmark a post' })
   toggleSavePost(
     @Param('id') postId: string,
-    @Body('userId') userId: string = 'admin-1',
+    @Headers('authorization') authHeader: string,
+    @Body('userId') userId: string = '',
   ) {
-    const isSaved = this.feedService.toggleSavePost(postId, userId);
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const isSaved = this.feedService.toggleSavePost(postId, actingUserId);
     return { success: true, isSaved };
   }
 
@@ -237,8 +386,13 @@ export class FeedController {
   // --- MESSENGER & CHATS ---
   @Get('chats')
   @ApiOperation({ summary: 'List all chat conversations' })
-  getChats(@Query('userId') userId: string = 'admin-1') {
-    return this.feedService.getChats(userId);
+  getChats(
+    @Headers('authorization') authHeader: string,
+    @Query('userId') userId: string = '',
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) return [];
+    return this.feedService.getChats(actingUserId);
   }
 
   @Post('chats/direct')
@@ -260,6 +414,7 @@ export class FeedController {
   @ApiOperation({ summary: 'Send text, photo, video, or voice message in a chat' })
   sendMessage(
     @Param('id') chatId: string,
+    @Headers('authorization') authHeader: string,
     @Body()
     body: {
       text?: string;
@@ -269,9 +424,13 @@ export class FeedController {
       durationSec?: number;
     },
   ) {
+    const actingUserId = this.resolveActingUserId(authHeader, body.senderId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
     return this.feedService.sendMessage(
       chatId,
-      body.senderId || 'admin-1',
+      actingUserId,
       body.text || '',
       body.mediaUrl,
       body.mediaType || 'text',

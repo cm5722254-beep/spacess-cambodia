@@ -5,6 +5,10 @@ export interface ProductItem extends ProductEntity {
   sellerName: string;
   sellerPhone: string;
   sellerAvatar: string;
+  sellerStoreDescription?: string;
+  sellerStoreBannerUrl?: string;
+  sellerStoreThemeColor?: string;
+  sellerStoreTagline?: string;
 }
 
 @Injectable()
@@ -37,6 +41,10 @@ export class MarketplaceService {
         sellerAvatar:
           seller?.avatar ||
           '/default_avatar.svg',
+        sellerStoreDescription: seller?.storeDescription || '',
+        sellerStoreBannerUrl: seller?.storeBannerUrl || '',
+        sellerStoreThemeColor: seller?.storeThemeColor || '#0A84FF',
+        sellerStoreTagline: seller?.storeTagline || '',
       };
     });
   }

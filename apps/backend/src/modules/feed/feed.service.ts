@@ -38,6 +38,8 @@ export interface PostItem {
   selectedReaction?: string;
   isBookmarked: boolean;
   tags: string[];
+  templateStyle?: string;
+  moodTag?: string;
   videoUrl?: string;
   isReel?: boolean;
   reelAudioTitle?: string;
@@ -48,6 +50,8 @@ export interface PostItem {
     text: string;
     timeAgo: string;
     authorId: string;
+    parentId?: string;
+    replyToAuthor?: string;
   }>;
 }
 
@@ -135,6 +139,29 @@ export class FeedService {
         avatar: s.authorAvatar || '/default_avatar.svg',
       },
       hasUnseen: true,
+      expiresAt: s.expiresAt,
+      createdAt: s.createdAt,
+    }));
+  }
+
+  getStoryArchive(userId: string) {
+    const dbStories = this.db.getStoryArchive(userId);
+    return dbStories.map((s) => ({
+      id: s.id,
+      city: 'កម្ពុជា (Cambodia)',
+      title: s.caption || 'Story',
+      caption: s.caption || '',
+      imageUrl: s.imageUrl,
+      coverUrl: s.imageUrl,
+      timeAgo: this.formatTimeAgo(s.createdAt),
+      author: {
+        id: s.authorId,
+        name: s.authorName,
+        avatar: s.authorAvatar || '/default_avatar.svg',
+      },
+      hasUnseen: false,
+      expiresAt: s.expiresAt,
+      isArchived: s.isArchived,
       createdAt: s.createdAt,
     }));
   }
@@ -189,6 +216,8 @@ export class FeedService {
     circleName?: string;
     imageUrl?: string;
     tags?: string[];
+    templateStyle?: string;
+    moodTag?: string;
   }) {
     const authorId = dto.authorId || 'admin-1';
     const post = this.db.createPost({
@@ -199,6 +228,8 @@ export class FeedService {
       circleName: dto.circleName,
       imageUrl: dto.imageUrl,
       tags: dto.tags,
+      templateStyle: dto.templateStyle,
+      moodTag: dto.moodTag,
     });
     return this.toPostItem(post, authorId);
   }
@@ -217,8 +248,8 @@ export class FeedService {
     return this.db.toggleReaction(postId, userId, reaction);
   }
 
-  addComment(postId: string, authorId: string, text: string) {
-    const comment = this.db.addComment(postId, authorId, text);
+  addComment(postId: string, authorId: string, text: string, parentId?: string) {
+    const comment = this.db.addComment(postId, authorId, text, parentId);
     const author = this.db.findUserById(authorId);
     return {
       id: comment.id,
@@ -227,6 +258,8 @@ export class FeedService {
       text: comment.text,
       timeAgo: 'មុននេះបន្តិច',
       authorId: comment.authorId,
+      parentId: comment.parentId,
+      replyToAuthor: comment.replyToAuthor,
     };
   }
 
@@ -394,12 +427,23 @@ export class FeedService {
     category?: string;
     duration?: string;
     isLive?: boolean;
+    liveTheme?: string;
+    pinnedNotice?: string;
+    videoFilter?: string;
   }) {
     const authorId = dto.authorId || 'admin-1';
     return this.db.createStream({
       ...dto,
       authorId,
     });
+  }
+
+  updateStreamCustomizations(
+    streamId: string,
+    userId: string,
+    data: { liveTheme?: string; pinnedNotice?: string; videoFilter?: string },
+  ) {
+    return this.db.updateStreamCustomizations(streamId, userId, data);
   }
 
   toggleStreamLike(streamId: string, userId: string) {
@@ -449,6 +493,8 @@ export class FeedService {
         text: c.text,
         timeAgo: this.formatTimeAgo(c.createdAt),
         authorId: c.authorId,
+        parentId: c.parentId,
+        replyToAuthor: c.replyToAuthor,
       };
     });
 
@@ -469,6 +515,8 @@ export class FeedService {
       videoUrl: p.videoUrl,
       isReel: p.isReel || false,
       reelAudioTitle: p.reelAudioTitle,
+      templateStyle: p.templateStyle,
+      moodTag: p.moodTag,
       aspectRatio: 1.33,
       timeAgo: this.formatTimeAgo(p.createdAt),
       likeCount,

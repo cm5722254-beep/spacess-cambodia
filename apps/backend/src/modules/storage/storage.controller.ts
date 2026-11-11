@@ -74,18 +74,26 @@ export class StorageController {
       throw new BadRequestException('No multipart file provided');
     }
 
-    const mime = (file.mimetype || body.mimeType || 'application/octet-stream').toLowerCase();
+    const fileMime = (file.mimetype || '').toLowerCase();
+    const bodyMime = (body.mimeType || '').toLowerCase();
+    const mime =
+      (fileMime && fileMime !== 'application/octet-stream' ? fileMime : bodyMime) ||
+      fileMime ||
+      'application/octet-stream';
     const origName = file.originalname || body.filename || 'upload.bin';
     const extFromName = origName.includes('.') ? origName.split('.').pop() || '' : '';
     let ext = extFromName;
     if (!ext) {
-      if (mime.includes('mp4')) ext = 'mp4';
+      if (mime.includes('audio/mpeg') || mime.includes('mp3')) ext = 'mp3';
+      else if (mime.includes('audio/m4a') || mime.includes('audio/mp4') || mime.includes('aac')) ext = 'm4a';
+      else if (mime.includes('audio/webm')) ext = 'webm';
+      else if (mime.includes('audio/wav')) ext = 'wav';
+      else if (mime.includes('mp4')) ext = 'mp4';
       else if (mime.includes('webm')) ext = 'webm';
       else if (mime.includes('quicktime')) ext = 'mov';
       else if (mime.includes('png')) ext = 'png';
       else if (mime.includes('webp')) ext = 'webp';
       else if (mime.includes('gif')) ext = 'gif';
-      else if (mime.includes('audio/m4a') || mime.includes('audio/mp4')) ext = 'm4a';
       else if (mime.includes('ogg')) ext = 'ogg';
       else ext = 'jpg';
     }

@@ -17,6 +17,9 @@ class StreamModel {
   final bool isLive;
   final int? viewerCount;
   bool isLiked;
+  final String? liveTheme;
+  final String? pinnedNotice;
+  final String? videoFilter;
   final String createdAt;
 
   StreamModel({
@@ -38,6 +41,9 @@ class StreamModel {
     required this.isLive,
     this.viewerCount,
     this.isLiked = false,
+    this.liveTheme,
+    this.pinnedNotice,
+    this.videoFilter,
     required this.createdAt,
   });
 
@@ -61,6 +67,9 @@ class StreamModel {
       isLive: json['isLive'] == true,
       viewerCount: json['viewerCount'],
       isLiked: json['isLiked'] == true,
+      liveTheme: json['liveTheme'],
+      pinnedNotice: json['pinnedNotice'],
+      videoFilter: json['videoFilter'],
       createdAt: json['createdAt'] ?? DateTime.now().toIso8601String(),
     );
   }
@@ -84,6 +93,9 @@ class StreamModel {
         'isLive': isLive,
         'viewerCount': viewerCount,
         'isLiked': isLiked,
+        'liveTheme': liveTheme,
+        'pinnedNotice': pinnedNotice,
+        'videoFilter': videoFilter,
         'createdAt': createdAt,
       };
 }

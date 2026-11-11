@@ -3,7 +3,7 @@ import { DbService, UserEntity } from '../database/db.service';
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly db: DbService) {}
+  constructor(private readonly db: DbService) { }
 
   register(dto: {
     phone: string;
@@ -78,13 +78,35 @@ export class AuthService {
     };
   }
 
-  updateProfile(userId: string, updates: { name?: string; bio?: string; location?: string; avatar?: string }) {
+  updateProfile(
+    userId: string,
+    updates: { name?: string; bio?: string; location?: string; avatar?: string; email?: string },
+  ) {
     const existing = this.db.findUserById(userId);
     if (!existing) {
       throw new BadRequestException('រកមិនឃើញគណនីនេះទេ');
     }
 
-    const payload: any = { ...updates };
+    const payload: Partial<UserEntity> = {};
+    if (updates.bio !== undefined) payload.bio = updates.bio.trim();
+    if (updates.location !== undefined) payload.location = updates.location.trim();
+    if (updates.avatar !== undefined) payload.avatar = updates.avatar.trim();
+
+    if (updates.email !== undefined) {
+      const cleanEmail = updates.email.trim().toLowerCase();
+      if (cleanEmail.length > 0) {
+        if (!cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+          throw new BadRequestException('ទម្រង់អ៊ីមែលមិនត្រឹមត្រូវទេ (Invalid email address)');
+        }
+        const existingEmailUser = this.db.findUserByEmail(cleanEmail);
+        if (existingEmailUser && existingEmailUser.id !== userId) {
+          throw new BadRequestException('អ៊ីមែលនេះមានអ្នកប្រើប្រាស់រួចហើយ (Email already in use)');
+        }
+        payload.email = cleanEmail;
+      } else {
+        payload.email = undefined;
+      }
+    }
 
     if (updates.name && updates.name.trim() !== existing.name) {
       if (existing.lastNameChangeAt) {
@@ -96,6 +118,7 @@ export class AuthService {
           throw new BadRequestException(`លោកអ្នកអាចប្តូរឈ្មោះម្តងទៀតបាននៅ ${daysLeft} ថ្ងៃទៀត (អនុញ្ញាតប្តូរឈ្មោះ ៧ ថ្ងៃម្តង)`);
         }
       }
+      payload.name = updates.name.trim();
       payload.lastNameChangeAt = new Date().toISOString();
     }
 
@@ -194,7 +217,18 @@ export class AuthService {
     };
   }
 
-  updateStore(userId: string, data: { storeName?: string; storePhone?: string; storeDescription?: string; bakongAccountId?: string }) {
+  updateStore(
+    userId: string,
+    data: {
+      storeName?: string;
+      storePhone?: string;
+      storeDescription?: string;
+      storeBannerUrl?: string;
+      storeThemeColor?: string;
+      storeTagline?: string;
+      bakongAccountId?: string;
+    },
+  ) {
     const user = this.db.updateUserStore(userId, data);
     if (!user) {
       throw new BadRequestException('រកមិនឃើញគណនីនេះទេ');
@@ -389,11 +423,31 @@ export class AuthService {
     if (!user) {
       return null;
     }
-    const safe = this.toSafeUser(user);
     const counts = this.db.getFollowCounts(user.id);
     const isFollowing = currentUserId ? this.db.isFollowing(currentUserId, user.id) : false;
+    const isSelf = currentUserId && currentUserId === user.id;
+    const base = isSelf
+      ? this.toSafeUser(user)
+      : {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        bio: user.bio || '',
+        location: user.location || 'Phnom Penh, Cambodia',
+        avatar: user.avatar,
+        bannerUrl: user.bannerUrl || '',
+        storeName: user.storeName || '',
+        storeDescription: user.storeDescription || '',
+        storeBannerUrl: user.storeBannerUrl || '',
+        storeThemeColor: user.storeThemeColor || '#0A84FF',
+        storeTagline: user.storeTagline || '',
+        subscriptionTier: user.subscriptionTier || 'FREE',
+        role: user.role,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt,
+      };
     return {
-      ...safe,
+      ...base,
       followerCount: counts.followersCount,
       followingCount: counts.followingCount,
       isFollowing,
@@ -478,6 +532,9 @@ export class AuthService {
       storeName: user.storeName || '',
       storePhone: user.storePhone || '',
       storeDescription: user.storeDescription || '',
+      storeBannerUrl: user.storeBannerUrl || '',
+      storeThemeColor: user.storeThemeColor || '#0A84FF',
+      storeTagline: user.storeTagline || '',
       bakongAccountId: user.bakongAccountId || '',
       bannerUrl: user.bannerUrl || '',
       twoFactorEnabled: user.twoFactorEnabled || false,

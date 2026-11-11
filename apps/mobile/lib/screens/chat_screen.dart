@@ -1289,11 +1289,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       return;
     }
 
-    final uploadedUrl = await ApiService().uploadMedia(
-      result.dataUrl,
-      filename: 'voice_${DateTime.now().millisecondsSinceEpoch}.webm',
-    );
-    final finalUrl = uploadedUrl ?? result.dataUrl;
+    final finalUrl = await ApiService().uploadVoiceDataUrl(result.dataUrl) ?? result.dataUrl;
     final dur = result.durationSec > 0 ? result.durationSec : fallbackDuration;
 
     final newMsg = await ApiService().sendMessage(

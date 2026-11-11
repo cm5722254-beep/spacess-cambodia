@@ -27,9 +27,51 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
   late String selectedSpaceId;
   String selectedCircle = 'Public / សាធារណៈ';
   String selectedCity = 'Phnom Penh, Cambodia';
+  String selectedTemplate = 'clean';
+  String selectedMood = '';
   bool isSubmitting = false;
   bool isImporting = false;
   String? _importedMedia;
+
+  static const List<Map<String, dynamic>> postTemplates = [
+    {'id': 'clean', 'label': 'Classic', 'colors': null},
+    {
+      'id': 'ocean',
+      'label': 'Ocean',
+      'colors': [Color(0xFF0A84FF), Color(0xFF5E5CE6)],
+    },
+    {
+      'id': 'sunset',
+      'label': 'Sunset',
+      'colors': [Color(0xFFFF5E62), Color(0xFFFF9966)],
+    },
+    {
+      'id': 'emerald',
+      'label': 'Emerald',
+      'colors': [Color(0xFF11998E), Color(0xFF38EF7D)],
+    },
+    {
+      'id': 'violet',
+      'label': 'Royal',
+      'colors': [Color(0xFF7F00FF), Color(0xFFE100FF)],
+    },
+    {
+      'id': 'gold',
+      'label': 'Angkor',
+      'colors': [Color(0xFFB7791F), Color(0xFFECC94B)],
+    },
+  ];
+
+  static const List<String> moodPresets = [
+    '',
+    '😊 រីករាយ',
+    '🔥 កំពុងល្បី',
+    '💎 VIP Style',
+    '🚀 ការងារ',
+    '☕ សម្រាក',
+    '🎉 អបអរ',
+    '❤️ ស្រលាញ់',
+  ];
 
   final List<String> circles = [
     'Public / សាធារណៈ',
@@ -82,6 +124,8 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
       circleName: selectedCircle,
       imageUrl: finalMedia,
       tags: ['SpacesCambodia', 'NewPost'],
+      templateStyle: selectedTemplate == 'clean' ? null : selectedTemplate,
+      moodTag: selectedMood.isEmpty ? null : selectedMood,
     );
 
     setState(() => isSubmitting = false);
@@ -248,26 +292,107 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
               }).toList(),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          // Text Field for Post
+          // Post Background Template Selector
+          Text(
+            tr('រចនាបទផ្ទាំង Post (Templates):', 'Post Design Templates:'),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.secondaryText),
+          ),
+          const SizedBox(height: 6),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: postTemplates.map((tpl) {
+                final tplId = tpl['id'] as String;
+                final isSelected = selectedTemplate == tplId;
+                final colors = tpl['colors'] as List<Color>?;
+                return GestureDetector(
+                  onTap: () => setState(() => selectedTemplate = tplId),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    decoration: BoxDecoration(
+                      gradient: colors != null ? LinearGradient(colors: colors) : null,
+                      color: colors == null ? AppTheme.surfaceBg : null,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF0A84FF) : AppTheme.border,
+                        width: isSelected ? 2.2 : 0.8,
+                      ),
+                    ),
+                    child: Text(
+                      tpl['label'] as String,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: colors != null ? CupertinoColors.white : AppTheme.primaryText,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Mood / Emoji Style Selector
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: moodPresets.map((mood) {
+                final isSelected = selectedMood == mood;
+                final label = mood.isEmpty ? tr('គ្មាន Emoji', 'Plain') : mood;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 7),
+                  child: LiquidGlassPill(
+                    label: label,
+                    isSelected: isSelected,
+                    activeColor: const Color(0xFFFF9500),
+                    onTap: () => setState(() => selectedMood = mood),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Text Field for Post with Live Template Preview
           Expanded(
-            child: CupertinoTextField(
-              controller: _contentController,
-              placeholder: tr(
-                'ចែករំលែករឿងរ៉ាវ ការងារ ឬរូបភាពរបស់អ្នកនៅទីនេះ...',
-                'Share your story, work, or thoughts here...',
-              ),
-              maxLines: null,
-              expands: true,
-              style: TextStyle(color: AppTheme.primaryText),
-              textAlignVertical: TextAlignVertical.top,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppTheme.fieldBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.border, width: 0.6),
-              ),
+            child: Builder(
+              builder: (context) {
+                final activeTpl = postTemplates.firstWhere(
+                  (t) => t['id'] == selectedTemplate,
+                  orElse: () => postTemplates.first,
+                );
+                final colors = activeTpl['colors'] as List<Color>?;
+                return CupertinoTextField(
+                  controller: _contentController,
+                  placeholder: tr(
+                    'ចែករំលែករឿងរ៉ាវ ការងារ ឬរូបភាពរបស់អ្នកនៅទីនេះ...',
+                    'Share your story, work, or thoughts here...',
+                  ),
+                  maxLines: null,
+                  expands: true,
+                  style: TextStyle(
+                    color: colors != null ? CupertinoColors.white : AppTheme.primaryText,
+                    fontSize: colors != null ? 17 : 15,
+                    fontWeight: colors != null ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                  placeholderStyle: TextStyle(
+                    color: colors != null ? CupertinoColors.white.withOpacity(0.75) : AppTheme.tertiaryText,
+                  ),
+                  textAlign: colors != null ? TextAlign.center : TextAlign.start,
+                  textAlignVertical: colors != null ? TextAlignVertical.center : TextAlignVertical.top,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: colors != null ? LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight) : null,
+                    color: colors == null ? AppTheme.fieldBg : null,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppTheme.border, width: 0.6),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 10),

@@ -16,7 +16,9 @@ class CommentsSheet extends StatefulWidget {
 
 class _CommentsSheetState extends State<CommentsSheet> {
   final TextEditingController _commentController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   late List<CommentItem> comments;
+  CommentItem? _replyingTo;
   bool isSending = false;
 
   @override
@@ -25,30 +27,62 @@ class _CommentsSheetState extends State<CommentsSheet> {
     comments = List.from(widget.post.comments);
   }
 
+  @override
+  void dispose() {
+    _commentController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  String _rootThreadId(CommentItem item, Map<String, CommentItem> byId) {
+    CommentItem cur = item;
+    final visited = <String>{cur.id};
+    while (cur.parentId != null && cur.parentId!.isNotEmpty) {
+      final parent = byId[cur.parentId!];
+      if (parent == null || visited.contains(parent.id)) break;
+      visited.add(parent.id);
+      cur = parent;
+    }
+    return cur.id;
+  }
+
+  void _startReply(CommentItem item) {
+    setState(() => _replyingTo = item);
+    _focusNode.requestFocus();
+  }
+
   void _sendComment() async {
     final text = _commentController.text.trim();
     if (text.isEmpty) return;
 
     final currentUser = ApiService().currentUser;
+    final replyTarget = _replyingTo;
     final tempComment = CommentItem(
       id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
       author: currentUser?.name ?? 'អ្នកប្រើប្រាស់',
       avatar: (currentUser?.avatar != null && currentUser!.avatar.isNotEmpty)
           ? currentUser.avatar
-          : '/uploads/admin_avatar.jpg',
+          : '/default_avatar.svg',
       text: text,
       timeAgo: 'មុននេះបន្តិច',
       authorId: currentUser?.id ?? '',
+      parentId: replyTarget?.id,
+      replyToAuthor: replyTarget?.author,
     );
 
     setState(() {
-      comments.insert(0, tempComment);
+      comments.add(tempComment);
       widget.post.commentCount += 1;
       _commentController.clear();
+      _replyingTo = null;
       isSending = true;
     });
 
-    final newComment = await ApiService().addComment(widget.post.id, text);
+    final newComment = await ApiService().addComment(
+      widget.post.id,
+      text,
+      parentId: replyTarget?.id,
+    );
     if (mounted) {
       setState(() {
         isSending = false;
@@ -92,8 +126,137 @@ class _CommentsSheetState extends State<CommentsSheet> {
     );
   }
 
+  Widget _buildCommentTile(CommentItem item, {bool isReply = false}) {
+    final currentUserId = ApiService().currentUser?.id;
+    final isAdmin = ApiService().currentUser?.isAdmin ?? false;
+    final canDelete = isAdmin || (item.authorId.isNotEmpty && item.authorId == currentUserId);
+
+    return Padding(
+      padding: EdgeInsets.only(left: isReply ? 38 : 0, bottom: isReply ? 8 : 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(isReply ? 14 : 18),
+            child: MediaImageView(
+              url: item.avatar,
+              width: isReply ? 28 : 36,
+              height: isReply ? 28 : 36,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LiquidGlassContainer(
+                  borderRadius: 16,
+                  blurSigma: 12,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              item.author,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: isReply ? 12.5 : 13,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.primaryText,
+                              ),
+                            ),
+                          ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                item.timeAgo,
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  color: AppTheme.tertiaryText,
+                                ),
+                              ),
+                              if (canDelete) ...[
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => _confirmDeleteComment(item),
+                                  child: Icon(
+                                    CupertinoIcons.trash,
+                                    size: 13,
+                                    color: AppTheme.accentCrimson,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      if (item.replyToAuthor != null && item.replyToAuthor!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            '@${item.replyToAuthor}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF0A84FF),
+                            ),
+                          ),
+                        ),
+                      Text(
+                        item.text,
+                        style: TextStyle(
+                          fontSize: isReply ? 13.5 : 14,
+                          color: AppTheme.primaryText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(left: 10, top: 4),
+                  child: GestureDetector(
+                    onTap: () => _startReply(item),
+                    child: Text(
+                      'ឆ្លើយតប (Reply)',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF0A84FF).withOpacity(0.9),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final Map<String, CommentItem> byId = {for (final c in comments) c.id: c};
+    final List<CommentItem> topLevel = [];
+    final Map<String, List<CommentItem>> threadReplies = {};
+
+    for (final c in comments) {
+      final rootId = _rootThreadId(c, byId);
+      if (rootId == c.id) {
+        topLevel.add(c);
+      } else {
+        threadReplies.putIfAbsent(rootId, () => []).add(c);
+      }
+    }
+
     return LiquidGlassSheet(
       initialHeightFraction: 0.78,
       child: Column(
@@ -108,7 +271,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
           ),
           const SizedBox(height: 12),
 
-          // Comments List
+          // Comments List with Nested Replies
           Expanded(
             child: comments.isEmpty
                 ? Center(
@@ -118,93 +281,53 @@ class _CommentsSheetState extends State<CommentsSheet> {
                       style: TextStyle(color: AppTheme.secondaryText),
                     ),
                   )
-                : ListView.separated(
-                    itemCount: comments.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                : ListView.builder(
+                    itemCount: topLevel.length,
                     itemBuilder: (context, index) {
-                      final item = comments[index];
-                      final currentUserId = ApiService().currentUser?.id;
-                      final isAdmin = ApiService().currentUser?.isAdmin ?? false;
-                      final canDelete = isAdmin || (item.authorId.isNotEmpty && item.authorId == currentUserId);
-
-                      return Row(
+                      final root = topLevel[index];
+                      final replies = threadReplies[root.id] ?? [];
+                      return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: MediaImageView(
-                              url: item.avatar,
-                              width: 36,
-                              height: 36,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: LiquidGlassContainer(
-                              borderRadius: 16,
-                              blurSigma: 12,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          item.author,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppTheme.primaryText,
-                                          ),
-                                        ),
-                                      ),
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
-                                            item.timeAgo,
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: AppTheme.tertiaryText,
-                                            ),
-                                          ),
-                                          if (canDelete) ...[
-                                            const SizedBox(width: 8),
-                                            GestureDetector(
-                                              onTap: () => _confirmDeleteComment(item),
-                                              child: Icon(
-                                                CupertinoIcons.trash,
-                                                size: 13,
-                                                color: AppTheme.accentCrimson,
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    item.text,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: AppTheme.primaryText,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+                          _buildCommentTile(root, isReply: false),
+                          for (final r in replies) _buildCommentTile(r, isReply: true),
                         ],
                       );
                     },
                   ),
           ),
+
+          if (_replyingTo != null)
+            Container(
+              margin: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A84FF).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(CupertinoIcons.arrow_turn_down_right, size: 14, color: Color(0xFF0A84FF)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'កំពុងឆ្លើយតបទៅ ${_replyingTo!.author}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0A84FF),
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => setState(() => _replyingTo = null),
+                    child: const Icon(CupertinoIcons.xmark_circle_fill, size: 16, color: Color(0xFF0A84FF)),
+                  ),
+                ],
+              ),
+            ),
 
           // Input field
           Padding(
@@ -214,7 +337,10 @@ class _CommentsSheetState extends State<CommentsSheet> {
                 Expanded(
                   child: CupertinoTextField(
                     controller: _commentController,
-                    placeholder: 'សរសេរមតិយោបល់...',
+                    focusNode: _focusNode,
+                    placeholder: _replyingTo != null
+                        ? 'សរសេរការឆ្លើយតបទៅ ${_replyingTo!.author}...'
+                        : 'សរសេរមតិយោបល់...',
                     style: TextStyle(color: AppTheme.primaryText),
                     placeholderStyle: TextStyle(color: AppTheme.tertiaryText),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

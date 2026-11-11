@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Get,
+  Headers,
   NotFoundException,
   Param,
   Post,
@@ -130,7 +132,7 @@ export class LiveStreamController {
       : 0;
 
     const rawComments = this.db.getCommentsByPostId(streamId);
-    const comments = rawComments.slice(-30).map((c) => {
+    const comments = rawComments.slice(-50).map((c) => {
       const user = this.db.findUserById(c.authorId);
       return {
         id: c.id,
@@ -138,6 +140,8 @@ export class LiveStreamController {
         author: user?.name || 'Spaces User',
         avatar: user?.avatar || '/default_avatar.svg',
         text: c.text,
+        parentId: c.parentId,
+        replyToAuthor: c.replyToAuthor,
         createdAt: c.createdAt,
       };
     });
@@ -154,6 +158,9 @@ export class LiveStreamController {
       likesCount: stream.likesCount || 0,
       commentsCount: comments.length,
       duration: stream.duration,
+      liveTheme: stream.liveTheme || 'ocean',
+      pinnedNotice: stream.pinnedNotice || '',
+      videoFilter: stream.videoFilter || 'normal',
       comments,
     };
   }
@@ -228,22 +235,37 @@ export class LiveStreamController {
         author: user?.name || 'Spaces User',
         avatar: user?.avatar || '/default_avatar.svg',
         text: c.text,
+        parentId: c.parentId,
+        replyToAuthor: c.replyToAuthor,
         createdAt: c.createdAt,
       };
     });
   }
 
   @Post(':id/comments')
-  @ApiOperation({ summary: 'Post a live or replay comment on a video stream' })
+  @ApiOperation({ summary: 'Post a live or replay comment (or reply) on a video stream' })
   addStreamComment(
     @Param('id') streamId: string,
-    @Body() body: { authorId?: string; text: string },
+    @Headers('authorization') authHeader: string,
+    @Body() body: { authorId?: string; text: string; parentId?: string },
   ) {
     if (!body.text || !body.text.trim()) {
       throw new BadRequestException('Comment text is required');
     }
-    const authorId = body.authorId || 'admin-1';
-    const created = this.db.addComment(streamId, authorId, body.text.trim());
+    let authorId = '';
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const decoded = JSON.parse(
+          Buffer.from(authHeader.replace('Bearer ', ''), 'base64').toString('utf8'),
+        );
+        if (decoded?.userId) authorId = String(decoded.userId);
+      } catch {}
+    }
+    if (!authorId) authorId = (body.authorId || '').trim();
+    if (!authorId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    const created = this.db.addComment(streamId, authorId, body.text.trim(), body.parentId);
     this.db.incrementStreamComments(streamId);
     const user = this.db.findUserById(authorId);
     return {
@@ -252,6 +274,8 @@ export class LiveStreamController {
       author: user?.name || 'Spaces User',
       avatar: user?.avatar || '/default_avatar.svg',
       text: created.text,
+      parentId: created.parentId,
+      replyToAuthor: created.replyToAuthor,
       createdAt: created.createdAt,
     };
   }

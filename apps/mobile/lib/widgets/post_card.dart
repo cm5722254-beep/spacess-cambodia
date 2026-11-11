@@ -6,6 +6,7 @@ import '../services/theme_service.dart';
 import 'liquid_glass.dart';
 import 'media_image_view.dart';
 import 'user_profile_modal.dart';
+import 'web_video_player.dart';
 
 class PostCard extends StatefulWidget {
   final PostModel post;
@@ -210,6 +211,23 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  List<Color>? _resolveTemplateColors(String? style) {
+    switch (style) {
+      case 'ocean':
+        return const [Color(0xFF0A84FF), Color(0xFF5E5CE6)];
+      case 'sunset':
+        return const [Color(0xFFFF5E62), Color(0xFFFF9966)];
+      case 'emerald':
+        return const [Color(0xFF11998E), Color(0xFF38EF7D)];
+      case 'violet':
+        return const [Color(0xFF7F00FF), Color(0xFFE100FF)];
+      case 'gold':
+        return const [Color(0xFFB7791F), Color(0xFFECC94B)];
+      default:
+        return null;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final spaceColor = Color(int.parse(widget.post.space.color.replaceFirst('#', '0xFF')));
@@ -395,32 +413,113 @@ class _PostCardState extends State<PostCard> {
                 ),
               ),
 
-              // Content
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                child: Text(
-                  widget.post.content,
-                  style: TextStyle(
-                    fontSize: 15,
-                    height: 1.45,
-                    color: AppTheme.primaryText,
-                  ),
-                ),
-              ),
-
-              // Image
-              if (widget.post.imageUrl != null && widget.post.imageUrl!.isNotEmpty)
+              // Mood Badge
+              if (widget.post.moodTag != null && widget.post.moodTag!.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: MediaImageView(
-                      url: widget.post.imageUrl!,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF9500).withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFFF9500).withValues(alpha: 0.35)),
+                    ),
+                    child: Text(
+                      widget.post.moodTag!,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFFF9500)),
                     ),
                   ),
                 ),
+
+              // Content (supports Post Design Templates)
+              Builder(
+                builder: (context) {
+                  final tplColors = _resolveTemplateColors(widget.post.templateStyle);
+                  if (tplColors != null) {
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: tplColors,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Text(
+                        widget.post.content,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          height: 1.45,
+                          color: CupertinoColors.white,
+                        ),
+                      ),
+                    );
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Text(
+                      widget.post.content,
+                      style: TextStyle(
+                        fontSize: 15,
+                        height: 1.45,
+                        color: AppTheme.primaryText,
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // Video or Image
+              Builder(
+                builder: (context) {
+                  final vUrl = widget.post.videoUrl ?? '';
+                  final imgUrl = widget.post.imageUrl ?? '';
+                  final candidate = vUrl.isNotEmpty ? vUrl : imgUrl;
+                  final lower = candidate.toLowerCase();
+                  final isVid = vUrl.isNotEmpty ||
+                      lower.endsWith('.mp4') ||
+                      lower.endsWith('.webm') ||
+                      lower.endsWith('.mov') ||
+                      lower.startsWith('data:video');
+                  if (isVid && candidate.isNotEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: WebVideoPlayerWidget(
+                            videoUrl: candidate,
+                            autoPlay: false,
+                            isActive: true,
+                            showControls: true,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  if (imgUrl.isNotEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: MediaImageView(
+                          url: imgUrl,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
 
               // Tags
               if (widget.post.tags.isNotEmpty)

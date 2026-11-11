@@ -17,6 +17,9 @@ export interface UserEntity {
   storeName?: string;
   storePhone?: string;
   storeDescription?: string;
+  storeBannerUrl?: string;
+  storeThemeColor?: string;
+  storeTagline?: string;
   bakongAccountId?: string;
   twoFactorEnabled?: boolean;
   subscriptionTier?: 'FREE' | 'PRO_PLUS' | 'ULTRA';
@@ -40,6 +43,8 @@ export interface PostEntity {
   videoUrl?: string;
   mediaType?: 'image' | 'video' | 'gif' | 'text';
   tags?: string[];
+  templateStyle?: string;
+  moodTag?: string;
   isBoosted?: boolean;
   isReel?: boolean;
   reelAudioTitle?: string;
@@ -52,6 +57,8 @@ export interface CommentEntity {
   postId: string;
   authorId: string;
   text: string;
+  parentId?: string;
+  replyToAuthor?: string;
   createdAt: string;
 }
 
@@ -125,6 +132,7 @@ export interface StoryEntity {
   authorAvatar: string;
   imageUrl: string;
   caption?: string;
+  expiresAt?: string;
   createdAt: string;
 }
 
@@ -151,6 +159,9 @@ export interface StreamEntity {
   liveChunkSeq?: number;
   liveChunks?: Array<{ seq: number; url: string; createdAt: string }>;
   liveEndedAt?: string;
+  liveTheme?: string;
+  pinnedNotice?: string;
+  videoFilter?: string;
   createdAt: string;
 }
 
@@ -522,6 +533,8 @@ export class DbService implements OnModuleInit {
     videoUrl?: string;
     mediaType?: 'image' | 'video' | 'gif' | 'text';
     tags?: string[];
+    templateStyle?: string;
+    moodTag?: string;
     isReel?: boolean;
     reelAudioTitle?: string;
   }): PostEntity {
@@ -538,6 +551,8 @@ export class DbService implements OnModuleInit {
       videoUrl: dto.videoUrl,
       mediaType: dto.mediaType || (dto.videoUrl ? 'video' : dto.imageUrl ? 'image' : 'text'),
       tags: dto.tags || [],
+      templateStyle: dto.templateStyle?.trim() || undefined,
+      moodTag: dto.moodTag?.trim() || undefined,
       isBoosted,
       isReel: dto.isReel ?? (dto.mediaType === 'video' || !!dto.videoUrl),
       reelAudioTitle: dto.reelAudioTitle,
@@ -628,12 +643,23 @@ export class DbService implements OnModuleInit {
   }
 
   // --- COMMENT OPERATIONS ---
-  addComment(postId: string, authorId: string, text: string): CommentEntity {
+  addComment(postId: string, authorId: string, text: string, parentId?: string): CommentEntity {
+    let replyToAuthor: string | undefined;
+    const cleanParentId = parentId?.trim() || undefined;
+    if (cleanParentId) {
+      const parentComment = this.state.comments.find((c) => c.id === cleanParentId && c.postId === postId);
+      if (parentComment) {
+        const parentAuthor = this.findUserById(parentComment.authorId);
+        replyToAuthor = parentAuthor?.name || 'អ្នកប្រើប្រាស់';
+      }
+    }
     const newComment: CommentEntity = {
-      id: `c-${Date.now()}`,
+      id: `c-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       postId,
       authorId,
       text: text.trim(),
+      parentId: cleanParentId,
+      replyToAuthor,
       createdAt: new Date().toISOString(),
     };
     this.state.comments.push(newComment);
@@ -772,13 +798,24 @@ export class DbService implements OnModuleInit {
   // --- STORE OPERATIONS ---
   updateUserStore(
     userId: string,
-    data: { storeName?: string; storePhone?: string; storeDescription?: string; bakongAccountId?: string },
+    data: {
+      storeName?: string;
+      storePhone?: string;
+      storeDescription?: string;
+      storeBannerUrl?: string;
+      storeThemeColor?: string;
+      storeTagline?: string;
+      bakongAccountId?: string;
+    },
   ): UserEntity | undefined {
     const user = this.findUserById(userId);
     if (!user) return undefined;
     if (data.storeName !== undefined) user.storeName = data.storeName.trim();
     if (data.storePhone !== undefined) user.storePhone = data.storePhone.trim();
     if (data.storeDescription !== undefined) user.storeDescription = data.storeDescription.trim();
+    if (data.storeBannerUrl !== undefined) user.storeBannerUrl = data.storeBannerUrl.trim();
+    if (data.storeThemeColor !== undefined) user.storeThemeColor = data.storeThemeColor.trim();
+    if (data.storeTagline !== undefined) user.storeTagline = data.storeTagline.trim();
     if (data.bakongAccountId !== undefined) user.bakongAccountId = data.bakongAccountId.trim();
 
     // Sync store info to all existing products belonging to this seller
@@ -969,6 +1006,8 @@ export class DbService implements OnModuleInit {
   // --- STORY OPERATIONS ---
   createStory(authorId: string, imageUrl: string, caption?: string): StoryEntity {
     const user = this.findUserById(authorId);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 24 * 60 * 60 * 1000).toISOString();
     const story: StoryEntity = {
       id: `story-${Date.now()}`,
       authorId,
@@ -976,7 +1015,8 @@ export class DbService implements OnModuleInit {
       authorAvatar: user?.avatar || '/default_avatar.svg',
       imageUrl: imageUrl.trim(),
       caption: caption?.trim(),
-      createdAt: new Date().toISOString(),
+      expiresAt,
+      createdAt: now.toISOString(),
     };
     if (!this.state.stories) this.state.stories = [];
     this.state.stories.unshift(story);
@@ -984,9 +1024,33 @@ export class DbService implements OnModuleInit {
     return story;
   }
 
+  private getStoryExpiryMs(story: StoryEntity): number {
+    if (story.expiresAt) {
+      const parsed = new Date(story.expiresAt).getTime();
+      if (!Number.isNaN(parsed)) return parsed;
+    }
+    return new Date(story.createdAt).getTime() + 24 * 60 * 60 * 1000;
+  }
+
   getStories(): StoryEntity[] {
     if (!this.state.stories) return [];
-    return this.state.stories;
+    const nowMs = Date.now();
+    return this.state.stories.filter((s) => this.getStoryExpiryMs(s) > nowMs);
+  }
+
+  getStoryArchive(userId: string): Array<StoryEntity & { isArchived: boolean }> {
+    if (!this.state.stories || !userId) return [];
+    const nowMs = Date.now();
+    return this.state.stories
+      .filter((s) => s.authorId === userId)
+      .map((s) => {
+        const expMs = this.getStoryExpiryMs(s);
+        return {
+          ...s,
+          expiresAt: s.expiresAt || new Date(expMs).toISOString(),
+          isArchived: expMs <= nowMs,
+        };
+      });
   }
 
   deleteStory(storyId: string, userId: string): boolean {
@@ -1259,6 +1323,9 @@ export class DbService implements OnModuleInit {
     category?: string;
     duration?: string;
     isLive?: boolean;
+    liveTheme?: string;
+    pinnedNotice?: string;
+    videoFilter?: string;
   }): StreamEntity {
     const author = this.findUserById(dto.authorId);
     const newStream: StreamEntity = {
@@ -1280,6 +1347,9 @@ export class DbService implements OnModuleInit {
       isLive: dto.isLive || false,
       viewerCount: dto.isLive ? 1 : undefined,
       likedUserIds: [],
+      liveTheme: dto.liveTheme?.trim() || 'ocean',
+      pinnedNotice: dto.pinnedNotice?.trim() || undefined,
+      videoFilter: dto.videoFilter?.trim() || 'normal',
       createdAt: new Date().toISOString(),
     };
 
@@ -1287,6 +1357,22 @@ export class DbService implements OnModuleInit {
     this.state.streams.unshift(newStream);
     this.save();
     return newStream;
+  }
+
+  updateStreamCustomizations(
+    streamId: string,
+    userId: string,
+    data: { liveTheme?: string; pinnedNotice?: string; videoFilter?: string },
+  ): StreamEntity | null {
+    const stream = this.getStreamById(streamId);
+    if (!stream) return null;
+    const user = this.findUserById(userId);
+    if (stream.authorId !== userId && user?.role !== 'ADMIN') return null;
+    if (data.liveTheme !== undefined) stream.liveTheme = data.liveTheme.trim() || 'ocean';
+    if (data.pinnedNotice !== undefined) stream.pinnedNotice = data.pinnedNotice.trim();
+    if (data.videoFilter !== undefined) stream.videoFilter = data.videoFilter.trim() || 'normal';
+    this.save();
+    return stream;
   }
 
   toggleStreamLike(streamId: string, userId: string): { isLiked: boolean; likesCount: number } {

@@ -11,6 +11,9 @@ class UserModel {
   final String? storeName;
   final String? storePhone;
   final String? storeDescription;
+  final String? storeBannerUrl;
+  final String? storeThemeColor;
+  final String? storeTagline;
   final String? bakongAccountId;
   final bool twoFactorEnabled;
   final String subscriptionTier; // 'FREE', 'PRO_PLUS', 'ULTRA'
@@ -33,6 +36,9 @@ class UserModel {
     this.storeName,
     this.storePhone,
     this.storeDescription,
+    this.storeBannerUrl,
+    this.storeThemeColor,
+    this.storeTagline,
     this.bakongAccountId,
     this.twoFactorEnabled = false,
     this.subscriptionTier = 'FREE',
@@ -62,6 +68,9 @@ class UserModel {
       storeName: json['storeName'],
       storePhone: json['storePhone'],
       storeDescription: json['storeDescription'],
+      storeBannerUrl: json['storeBannerUrl'],
+      storeThemeColor: json['storeThemeColor'],
+      storeTagline: json['storeTagline'],
       bakongAccountId: json['bakongAccountId'] ?? '',
       twoFactorEnabled: json['twoFactorEnabled'] ?? false,
       subscriptionTier: json['subscriptionTier'] ?? 'FREE',
@@ -86,6 +95,9 @@ class UserModel {
         'storeName': storeName,
         'storePhone': storePhone,
         'storeDescription': storeDescription,
+        'storeBannerUrl': storeBannerUrl,
+        'storeThemeColor': storeThemeColor,
+        'storeTagline': storeTagline,
         'bakongAccountId': bakongAccountId,
         'twoFactorEnabled': twoFactorEnabled,
         'subscriptionTier': subscriptionTier,
