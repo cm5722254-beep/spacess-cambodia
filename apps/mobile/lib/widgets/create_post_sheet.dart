@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Colors;
+import 'package:flutter/material.dart' show Colors, LinearProgressIndicator, AlwaysStoppedAnimation;
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../services/theme_service.dart';
@@ -238,11 +238,17 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
     );
   }
 
+  double _uploadProgress = 0.0;
+
   void _submit() async {
+    if (isSubmitting) return; // Strict Anti-Duplicate Submit Guard
     final text = _contentController.text.trim();
     if (text.isEmpty && _importedMedia == null) return;
 
-    setState(() => isSubmitting = true);
+    setState(() {
+      isSubmitting = true;
+      _uploadProgress = 0.2;
+    });
 
     final finalMedia = _importedMedia ?? (_imageUrlController.text.trim().isEmpty ? null : _imageUrlController.text.trim());
 
@@ -250,6 +256,8 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
     if (selectedMusic != null) {
       enrichedContent = '🎵 $selectedMusic\n$enrichedContent';
     }
+
+    if (mounted) setState(() => _uploadProgress = 0.65);
 
     final newPost = await ApiService().createPost(
       content: enrichedContent,
@@ -262,11 +270,30 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
       moodTag: selectedMood.isEmpty ? null : selectedMood,
     );
 
-    setState(() => isSubmitting = false);
+    if (mounted) setState(() => _uploadProgress = 1.0);
 
     if (newPost != null && mounted) {
+      await Future.delayed(const Duration(milliseconds: 250));
+      if (!mounted) return;
       widget.onPostCreated(newPost);
       Navigator.pop(context);
+    } else {
+      if (mounted) {
+        setState(() => isSubmitting = false);
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('ការបង្ហោះមិនជោគជ័យ'),
+            content: const Text('មិនអាចបង្ហោះសារបានទេ សូមពិនិត្យមើលអ៊ីនធឺណិត ហើយព្យាយាមម្តងទៀត។'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('យល់ព្រម'),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
@@ -323,15 +350,18 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
                 ),
                 CupertinoButton(
                   padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                  color: const Color(0xFFE4E6EB).withOpacity(isDark ? 0.2 : 1.0),
+                  color: isSubmitting ? const Color(0xFF34C759) : const Color(0xFF007AFF),
                   borderRadius: BorderRadius.circular(10),
                   onPressed: isSubmitting ? null : _submit,
                   child: isSubmitting
-                      ? const CupertinoActivityIndicator(radius: 8)
-                      : Text(
+                      ? Text(
+                          '${(_uploadProgress * 100).toInt()}%',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13),
+                        )
+                      : const Text(
                           'បន្ទាប់',
                           style: TextStyle(
-                            color: isDark ? CupertinoColors.white : const Color(0xFF050505),
+                            color: Colors.white,
                             fontWeight: FontWeight.w800,
                             fontSize: 15,
                           ),
@@ -340,6 +370,34 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
               ],
             ),
           ),
+          if (isSubmitting)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _uploadProgress,
+                      backgroundColor: isDark ? const Color(0xFF2C2F3E) : const Color(0xFFE5E7EB),
+                      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF007AFF)),
+                      minHeight: 4,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('កំពុងបង្ហោះសារ...', style: TextStyle(fontSize: 11, color: AppTheme.secondaryText)),
+                      Text(
+                        '${(_uploadProgress * 100).toInt()}%',
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF007AFF)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           Container(height: 0.5, color: AppTheme.divider),
 
           // Author Row & 4 Quick Pills underneath matching c88e532b.jpg

@@ -22,7 +22,7 @@ export class AuthService {
       throw new BadRequestException('លេខទូរស័ព្ទនេះត្រូវបានចុះឈ្មោះរួចហើយ');
     }
 
-    const username = (dto.username || `user_${cleanPhone.slice(-4)}`).trim();
+    const username = (dto.username || `user_${cleanPhone.slice(-4)}`).replace(/^@+/, '').trim();
     const existingUsername = this.db.findUserByUsername(username);
     if (existingUsername) {
       throw new BadRequestException('ឈ្មោះគណនី (username) នេះមានអ្នកប្រើរួចហើយ');

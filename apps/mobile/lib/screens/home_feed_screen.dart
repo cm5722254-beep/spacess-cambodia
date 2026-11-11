@@ -12,7 +12,6 @@ import '../widgets/media_image_view.dart';
 import '../widgets/liquid_glass.dart';
 import '../widgets/pwa_install_banner.dart';
 import 'chat_screen.dart';
-import 'profile_screen.dart';
 import 'marketplace_screen.dart';
 import 'stream_watch_screen.dart';
 
@@ -379,59 +378,17 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Focus Mode Button (responsive icon-only on compact phones)
-                LiquidGlassPressable(
-                  onTap: _toggleFocusMode,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: ResponsiveLayout.isCompact(context) ? 7 : 9,
-                      vertical: 5,
-                    ),
-                    margin: const EdgeInsets.only(right: 2),
-                    decoration: BoxDecoration(
-                      color: focusMode
-                          ? const Color(0xFF34C759).withValues(alpha: 0.18)
-                          : AppTheme.glassPillBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: focusMode ? const Color(0xFF34C759) : AppTheme.glassSpecularTop,
-                        width: 0.9,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          CupertinoIcons.leaf_arrow_circlepath,
-                          size: 15,
-                          color: focusMode ? const Color(0xFF34C759) : AppTheme.secondaryText,
-                        ),
-                        if (!ResponsiveLayout.isCompact(context)) ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            'Focus',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: focusMode ? const Color(0xFF34C759) : AppTheme.secondaryText,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-
                 // PWA Install Pill (Web only, hidden when already installed)
                 const PwaInstallBanner(compact: true),
 
                 // Search toggle
                 CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minSize: 36,
                   child: Icon(
                     isSearching ? CupertinoIcons.xmark_circle_fill : CupertinoIcons.search,
                     color: const Color(0xFF007AFF),
-                    size: 22,
+                    size: 20,
                   ),
                   onPressed: () {
                     setState(() {
@@ -444,52 +401,21 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   },
                 ),
 
-                // Marketplace / E-Commerce button
-                CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: const Icon(
-                    CupertinoIcons.bag_fill,
-                    color: Color(0xFF007AFF),
-                    size: 22,
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      CupertinoPageRoute(builder: (_) => const MarketplaceScreen()),
-                    );
-                  },
-                ),
-
-                // Watch / Video Stream Button
-                CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: const Icon(
-                    CupertinoIcons.play_rectangle_fill,
-                    color: Color(0xFFFF2D55),
-                    size: 22,
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      CupertinoPageRoute(builder: (_) => const StreamWatchScreen()),
-                    );
-                  },
-                ),
-
                 // Notification Bell
                 CupertinoButton(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minSize: 36,
                   onPressed: widget.onNotificationTap,
                   child: Stack(
                     clipBehavior: Clip.none,
                     children: [
-                      const Icon(CupertinoIcons.bell_fill, color: Color(0xFF007AFF), size: 22),
+                      const Icon(CupertinoIcons.bell_fill, color: Color(0xFF007AFF), size: 20),
                       Positioned(
-                        top: -2,
-                        right: -2,
+                        top: -1,
+                        right: -1,
                         child: Container(
-                          width: 8,
-                          height: 8,
+                          width: 7,
+                          height: 7,
                           decoration: const BoxDecoration(
                             color: Color(0xFFFF3B30),
                             shape: BoxShape.circle,
@@ -500,27 +426,82 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   ),
                 ),
 
-                // User Profile Avatar
+                // Quick More / Actions Menu (Focus Mode, Marketplace, Live Stream)
                 CupertinoButton(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
+                  minSize: 36,
+                  child: const Icon(
+                    CupertinoIcons.ellipsis_circle_fill,
+                    color: Color(0xFF007AFF),
+                    size: 20,
+                  ),
                   onPressed: () {
-                    Navigator.push(
-                      context,
-                      CupertinoPageRoute(builder: (_) => const ProfileScreen()),
+                    showCupertinoModalPopup(
+                      context: context,
+                      builder: (ctx) => CupertinoActionSheet(
+                        title: const Text('Spaces Shortcuts & Quick Access'),
+                        actions: [
+                          CupertinoActionSheetAction(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _toggleFocusMode();
+                            },
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  CupertinoIcons.leaf_arrow_circlepath,
+                                  color: focusMode ? const Color(0xFF34C759) : const Color(0xFF007AFF),
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(focusMode ? 'បិទ Focus Mode' : 'បើក Focus Mode (Calm Digest)'),
+                              ],
+                            ),
+                          ),
+                          CupertinoActionSheetAction(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                CupertinoPageRoute(builder: (_) => const MarketplaceScreen()),
+                              );
+                            },
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(CupertinoIcons.bag_fill, color: Color(0xFF007AFF), size: 18),
+                                SizedBox(width: 8),
+                                Text('ផ្សារទំនិញ (Marketplace)'),
+                              ],
+                            ),
+                          ),
+                          CupertinoActionSheetAction(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              Navigator.push(
+                                context,
+                                CupertinoPageRoute(builder: (_) => const StreamWatchScreen()),
+                              );
+                            },
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(CupertinoIcons.play_rectangle_fill, color: Color(0xFFFF2D55), size: 18),
+                                SizedBox(width: 8),
+                                Text('ការផ្សាយបន្តផ្ទាល់ (Live Streams)'),
+                              ],
+                            ),
+                          ),
+                        ],
+                        cancelButton: CupertinoActionSheetAction(
+                          isDefaultAction: true,
+                          onPressed: () => Navigator.pop(ctx),
+                          child: const Text('បិទ'),
+                        ),
+                      ),
                     );
                   },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: MediaImageView(
-                      url: (ApiService().currentUser?.avatar != null &&
-                              ApiService().currentUser!.avatar.isNotEmpty)
-                          ? ApiService().currentUser!.avatar
-                          : '/default_avatar.svg',
-                      width: 28,
-                      height: 28,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
                 ),
               ],
             ),

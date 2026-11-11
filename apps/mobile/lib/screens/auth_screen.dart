@@ -74,7 +74,7 @@ class _AuthScreenState extends State<AuthScreen> {
     } else {
       // Register
       final name = _nameController.text.trim();
-      final username = _usernameController.text.trim();
+      final username = _usernameController.text.trim().replaceAll(RegExp(r'^@+'), '');
       final email = _emailController.text.trim();
 
       if (name.isEmpty || username.isEmpty) {

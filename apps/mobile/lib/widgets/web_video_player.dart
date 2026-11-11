@@ -14,6 +14,7 @@ class WebVideoPlayerWidget extends StatefulWidget {
   final bool isLooping;
   final bool showControls;
   final bool isActive;
+  final int? parentTabIndex;
   final double bottomControlsPadding;
   final BoxFit fit;
 
@@ -24,6 +25,7 @@ class WebVideoPlayerWidget extends StatefulWidget {
     this.isLooping = true,
     this.showControls = true,
     this.isActive = true,
+    this.parentTabIndex,
     this.bottomControlsPadding = 0.0,
     this.fit = BoxFit.cover,
   });
@@ -77,7 +79,8 @@ class _WebVideoPlayerWidgetState extends State<WebVideoPlayerWidget> {
           ..style.height = '100%'
           ..style.objectFit = widget.fit == BoxFit.cover ? 'cover' : 'contain'
           ..style.border = 'none'
-          ..style.backgroundColor = 'black';
+          ..style.backgroundColor = 'black'
+          ..style.pointerEvents = 'none';
 
         video.setAttribute('playsinline', 'true');
         video.setAttribute('webkit-playsinline', 'true');
@@ -139,10 +142,21 @@ class _WebVideoPlayerWidgetState extends State<WebVideoPlayerWidget> {
 
   void _onTabChanged() {
     if (!mounted || _videoElement == null) return;
-    if (!widget.isActive && !_videoElement!.paused) {
+    final currentTab = ApiService().activeTabIndexNotifier.value;
+    if (widget.parentTabIndex != null && currentTab != widget.parentTabIndex) {
+      _videoElement!.pause();
+      setState(() => _isPlaying = false);
+    } else if (!widget.isActive && !_videoElement!.paused) {
       _videoElement!.pause();
       setState(() => _isPlaying = false);
     }
+  }
+
+  @override
+  void deactivate() {
+    _videoElement?.pause();
+    setState(() => _isPlaying = false);
+    super.deactivate();
   }
 
   @override
@@ -276,16 +290,11 @@ class _WebVideoPlayerWidgetState extends State<WebVideoPlayerWidget> {
 
     return Stack(
       children: [
-        // Tap Layer to Toggle Compact Controls Overlay
+        // Tap Layer to Toggle Play/Pause & Controls Overlay
         Positioned.fill(
           child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTap: () {
-              setState(() => _showControlsOverlay = !_showControlsOverlay);
-              if (_showControlsOverlay && _isPlaying) {
-                _scheduleAutoHide();
-              }
-            },
+            behavior: HitTestBehavior.opaque,
+            onTap: _togglePlay,
             child: HtmlElementView(viewType: _viewId),
           ),
         ),

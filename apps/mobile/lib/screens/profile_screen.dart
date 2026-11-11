@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors;
 import '../models/post_model.dart';
+import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/language_service.dart';
 import '../services/theme_service.dart';
@@ -13,6 +14,7 @@ import '../widgets/media_image_view.dart';
 import '../widgets/vip_subscription_sheet.dart';
 import '../widgets/liquid_glass.dart';
 import '../widgets/pwa_install_sheet.dart';
+import '../widgets/media_cropper_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -26,15 +28,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool hideMetrics = false;
   bool focusMode = false;
   int _selectedTab = 1; // 1: My Posts (Default), 3: Videos, 2: Saved
+  bool _isPageMode = false;
 
   List<PostModel> _myPosts = [];
   List<PostModel> _savedPosts = [];
   bool _isLoadingPosts = false;
+  int _followerCount = 0;
+  int _followingCount = 0;
+  List<PublicUserModel> _realFriends = [];
 
   @override
   void initState() {
     super.initState();
     _loadTabContent();
+    _loadUserStats();
+  }
+
+  void _loadUserStats() async {
+    final user = _api.currentUser;
+    if (user != null) {
+      final profile = await _api.fetchPublicProfile(user.id);
+      final friendsOverview = await _api.fetchFriendsOverview();
+      if (mounted) {
+        setState(() {
+          _followerCount = profile?['followerCount'] ?? 0;
+          _followingCount = profile?['followingCount'] ?? 0;
+          _realFriends = friendsOverview['friends'] ?? [];
+        });
+      }
+    }
   }
 
   void _loadTabContent() async {
@@ -186,17 +208,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _openChangeBannerSheet() async {
     final media = await MediaPickerHelper.pickAndUploadMedia(accept: 'image/*');
-    if (media != null && media.isNotEmpty) {
-      await _api.updateBanner(media);
-      if (mounted) setState(() {});
+    if (media != null && media.isNotEmpty && mounted) {
+      final cropped = await MediaCropperSheet.show(
+        context,
+        imageUrl: media,
+        isCircle: false,
+        title: 'កែសម្រួលរូប Banner (Crop & Position)',
+      );
+      if (cropped != null) {
+        await _api.updateBanner(cropped);
+        if (mounted) setState(() {});
+      }
     }
   }
 
   void _pickAndUploadAvatar() async {
     final media = await MediaPickerHelper.pickAndUploadMedia(accept: 'image/*');
-    if (media != null && media.isNotEmpty) {
-      await _api.updateProfile(avatar: media);
-      if (mounted) setState(() {});
+    if (media != null && media.isNotEmpty && mounted) {
+      final cropped = await MediaCropperSheet.show(
+        context,
+        imageUrl: media,
+        isCircle: true,
+        title: 'កែសម្រួលរូប Profile (Crop & Zoom)',
+      );
+      if (cropped != null) {
+        await _api.updateProfile(avatar: cropped);
+        if (mounted) setState(() {});
+      }
     }
   }
 
@@ -466,6 +504,68 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showAccountOrPageSwitcher() {
+    final user = _api.currentUser;
+    final hasStore = user?.storeName != null && user!.storeName!.trim().isNotEmpty;
+    final storeTitle = hasStore ? user.storeName!.trim() : 'បង្កើតទំព័រអាជីវកម្ម (Create Business Page)';
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('ប្តូរគណនី / ទំព័រ (Switch Profile / Page)', style: TextStyle(fontWeight: FontWeight.bold)),
+        message: const Text('អ្នកអាចប្តូររវាងគណនីផ្ទាល់ខ្លួន និងទំព័រអាជីវកម្ម (Business Page 1 គណនី)'),
+        actions: [
+          CupertinoActionSheetAction(
+            isDefaultAction: !_isPageMode,
+            onPressed: () {
+              Navigator.pop(ctx);
+              setState(() => _isPageMode = false);
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(CupertinoIcons.person_crop_circle_fill, size: 18),
+                const SizedBox(width: 8),
+                Text('គណនីផ្ទាល់ខ្លួន: ${user?.name ?? "User"}'),
+                if (!_isPageMode) ...[
+                  const SizedBox(width: 6),
+                  const Icon(CupertinoIcons.checkmark, size: 16, color: Color(0xFF007AFF)),
+                ],
+              ],
+            ),
+          ),
+          CupertinoActionSheetAction(
+            isDefaultAction: _isPageMode,
+            onPressed: () {
+              Navigator.pop(ctx);
+              if (!hasStore) {
+                _openStoreSettingsSheet();
+              } else {
+                setState(() => _isPageMode = true);
+              }
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(CupertinoIcons.flag_fill, size: 18, color: Color(0xFF007AFF)),
+                const SizedBox(width: 8),
+                Text('ទំព័រអាជីវកម្ម: $storeTitle'),
+                if (_isPageMode) ...[
+                  const SizedBox(width: 6),
+                  const Icon(CupertinoIcons.checkmark, size: 16, color: Color(0xFF007AFF)),
+                ],
+              ],
+            ),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('បិទ'),
         ),
       ),
     );
@@ -1230,22 +1330,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final user = _api.currentUser;
             final isAdmin = user?.isAdmin ?? false;
             final rawName = user?.name.trim() ?? '';
-            final userName = rawName.isNotEmpty ? rawName : (isAdmin ? 'CHAN SOCHEAT' : 'អ្នកប្រើប្រាស់');
+            final personalName = rawName.isNotEmpty ? rawName : (isAdmin ? 'CHAN SOCHEAT' : 'អ្នកប្រើប្រាស់');
+            final hasStore = user?.storeName != null && user!.storeName!.trim().isNotEmpty;
+            final storeName = hasStore ? user.storeName!.trim() : 'ទំព័រអាជីវកម្ម (Business Page)';
+            final userName = _isPageMode ? storeName : personalName;
+
             final userAvatar = (user?.avatar != null && user!.avatar.isNotEmpty)
                 ? user.avatar
                 : (isAdmin
                     ? '/uploads/admin_avatar.jpg'
                     : '/default_avatar.svg');
-            final userBanner = user?.bannerUrl ??
-                'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=80';
+            final userBanner = (_isPageMode && user?.storeBannerUrl != null && user!.storeBannerUrl!.trim().isNotEmpty)
+                ? user.storeBannerUrl!.trim()
+                : (user?.bannerUrl ??
+                    'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=80');
 
             return CupertinoPageScaffold(
       backgroundColor: AppTheme.scaffoldBg,
       navigationBar: CupertinoNavigationBar(
         backgroundColor: AppTheme.navBarBg,
-        middle: Text(
-          tr('គណនីផ្ទាល់ខ្លួន', 'Profile'),
-          style: TextStyle(color: AppTheme.primaryText, fontWeight: FontWeight.w700),
+        middle: GestureDetector(
+          onTap: _showAccountOrPageSwitcher,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _isPageMode
+                  ? const Color(0xFF007AFF).withOpacity(0.15)
+                  : CupertinoColors.systemGrey.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _isPageMode ? CupertinoIcons.flag_fill : CupertinoIcons.person_crop_circle_fill,
+                  size: 14,
+                  color: _isPageMode ? const Color(0xFF007AFF) : AppTheme.primaryText,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  _isPageMode ? storeName : tr('គណនីផ្ទាល់ខ្លួន', 'Profile'),
+                  style: TextStyle(
+                    color: _isPageMode ? const Color(0xFF007AFF) : AppTheme.primaryText,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  CupertinoIcons.chevron_down,
+                  size: 11,
+                  color: _isPageMode ? const Color(0xFF007AFF) : AppTheme.secondaryText,
+                ),
+              ],
+            ),
+          ),
         ),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -1442,9 +1581,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         // Name & Verified Badge
                         Transform.translate(
                           offset: const Offset(0, -32),
-                          child: Column(
-                            children: [
-                              Row(
+                          child: Builder(
+                            builder: (context) {
+                              final isVerifiedUser = (user?.isVerified == true) || (user?.isVip == true) || (user?.isAdmin == true);
+                              final displayBio = _isPageMode
+                                  ? ((user?.storeTagline != null && user!.storeTagline!.trim().isNotEmpty)
+                                      ? user.storeTagline!.trim()
+                                      : ((user?.storeDescription != null && user!.storeDescription!.trim().isNotEmpty)
+                                          ? user.storeDescription!.trim()
+                                          : 'ទំព័រអាជីវកម្មផ្លូវការ (Official Business Page)'))
+                                  : (user?.bio != null && user!.bio!.trim().isNotEmpty ? user.bio!.trim() : null);
+
+                              return Column(
+                                children: [
+                                  Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   Text(
@@ -1455,104 +1605,128 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       color: AppTheme.primaryText,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  const Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFF007AFF), size: 20),
+                                  if (isVerifiedUser) ...[
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: _openVipModal,
+                                      child: const Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFF007AFF), size: 20),
+                                    ),
+                                  ] else ...[
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: _openVipModal,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF007AFF).withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: const Color(0xFF007AFF).withOpacity(0.3)),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(CupertinoIcons.shield_lefthalf_fill, size: 11, color: Color(0xFF007AFF)),
+                                            SizedBox(width: 3),
+                                            Text(
+                                              'Get Verified',
+                                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF007AFF)),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                               const SizedBox(height: 3),
-                              Text(
-                                'អ្នកបង្កើតឌីជីថល (Digital Creator)',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppTheme.secondaryText,
-                                  fontWeight: FontWeight.w500,
+                              if (displayBio != null) ...[
+                                Text(
+                                  displayBio,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: AppTheme.secondaryText,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
-                              ),
+                              ] else ...[
+                                Text(
+                                  '@${user?.username ?? ""} • ${user?.location ?? "Cambodia"}',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: AppTheme.secondaryText,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 5),
                               Text(
-                                'អ្នកតាមដាន 627នាក់  •  កំពុងតាមដាន 244 នាក់',
+                                'អ្នកតាមដាន $_followerCount នាក់  •  កំពុងតាមដាន $_followingCount នាក់',
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
                                   color: AppTheme.primaryText.withOpacity(0.85),
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Contact Work: t.me/BongCheatz_IT',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Color(0xFF007AFF),
-                                  fontWeight: FontWeight.w600,
+                              if (user?.storePhone != null && user!.storePhone!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'ទំនាក់ទំនង: ${user.storePhone!.trim()}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF007AFF),
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 10),
-
-                              // Mutual Friends Stack
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                    width: 58,
-                                    height: 24,
-                                    child: Stack(
-                                      children: [
-                                        Positioned(
-                                          left: 0,
-                                          child: Container(
-                                            width: 24,
-                                            height: 24,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              border: Border.all(color: AppTheme.cardBg, width: 1.5),
-                                            ),
-                                            child: const ClipOval(
-                                              child: MediaImageView(url: '/uploads/media-1794317345030-536.jpg'),
-                                            ),
-                                          ),
-                                        ),
-                                        Positioned(
-                                          left: 14,
-                                          child: Container(
-                                            width: 24,
-                                            height: 24,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              border: Border.all(color: AppTheme.cardBg, width: 1.5),
-                                            ),
-                                            child: const ClipOval(
-                                              child: MediaImageView(url: '/uploads/media-1794329090435-680.jpg'),
-                                            ),
-                                          ),
-                                        ),
-                                        Positioned(
-                                          left: 28,
-                                          child: Container(
-                                            width: 24,
-                                            height: 24,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              border: Border.all(color: AppTheme.cardBg, width: 1.5),
-                                            ),
-                                            child: const ClipOval(
-                                              child: MediaImageView(url: '/default_avatar.svg'),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                              ] else if (user?.email != null && user!.email!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Email: ${user.email!.trim()}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF007AFF),
+                                    fontWeight: FontWeight.w600,
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'មិត្តភក្តិមានរឿងដូចគ្នា',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppTheme.secondaryText,
-                                      fontWeight: FontWeight.w500,
+                                ),
+                              ],
+                              if (_realFriends.isNotEmpty) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    SizedBox(
+                                      width: (_realFriends.take(3).length * 16.0 + 8.0).clamp(24.0, 60.0),
+                                      height: 24,
+                                      child: Stack(
+                                        children: [
+                                          for (int i = 0; i < _realFriends.take(3).length; i++)
+                                            Positioned(
+                                              left: i * 14.0,
+                                              child: Container(
+                                                width: 24,
+                                                height: 24,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(color: AppTheme.cardBg, width: 1.5),
+                                                ),
+                                                child: ClipOval(
+                                                  child: MediaImageView(url: _realFriends[i].avatar.isNotEmpty ? _realFriends[i].avatar : '/default_avatar.svg'),
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'មិត្តភក្តិ ${_realFriends.length} នាក់',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppTheme.secondaryText,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                               const SizedBox(height: 14),
 
                               // Two Main Facebook Buttons: [📊 ផ្ទាំងគ្រប់គ្រង] & [+ បង្កើត]
@@ -1612,8 +1786,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ],
                               ),
                             ],
-                          ),
-                        ),
+                          );
+                        },
+                      ),
+                    ),
                       ],
                     ),
                   ),

@@ -36,6 +36,7 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
   bool _boostReel = false;
   bool _isUploading = false;
   bool _isPublishing = false;
+  double _uploadProgress = 0.0;
 
   // Edit tools state
   String _activeFilter = 'normal'; // 'normal', 'warm', 'cinema', 'neon', 'mono'
@@ -110,10 +111,17 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
   }
 
   Future<void> _publishReel() async {
+    if (_isPublishing) return;
     if (_selectedVideoUrl == null || _selectedVideoUrl!.isEmpty) return;
-    setState(() => _isPublishing = true);
+    setState(() {
+      _isPublishing = true;
+      _uploadProgress = 0.25;
+    });
 
     try {
+      await Future.delayed(const Duration(milliseconds: 300));
+      if (mounted) setState(() => _uploadProgress = 0.65);
+
       await ApiService().createReel(
         videoUrl: _selectedVideoUrl!,
         content: _captionCtrl.text.trim(),
@@ -124,6 +132,9 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
       );
 
       if (mounted) {
+        setState(() => _uploadProgress = 1.0);
+        await Future.delayed(const Duration(milliseconds: 200));
+        if (!mounted) return;
         setState(() => _isPublishing = false);
         Navigator.pop(context);
         widget.onReelCreated?.call();
@@ -1006,7 +1017,21 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
                   borderRadius: BorderRadius.circular(12),
                   onPressed: _isPublishing ? null : _publishReel,
                   child: _isPublishing
-                      ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+                      ? Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const CupertinoActivityIndicator(color: CupertinoColors.white),
+                            const SizedBox(width: 8),
+                            Text(
+                              'កំពុងបង្ហោះ ${(_uploadProgress * 100).toInt()}%...',
+                              style: const TextStyle(
+                                color: CupertinoColors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        )
                       : const Text(
                           'ចែករំលែកឥឡូវនេះ',
                           style: TextStyle(

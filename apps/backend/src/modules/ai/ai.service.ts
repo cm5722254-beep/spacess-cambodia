@@ -33,6 +33,50 @@ export class AiService {
     }
   }
 
+  private async queryGemini(systemPrompt: string, message: string, history?: { role: string; content: string }[]) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return null;
+
+    try {
+      const contents: any[] = [];
+      if (history && Array.isArray(history)) {
+        for (const h of history.slice(-6)) {
+          contents.push({
+            role: h.role === 'assistant' || h.role === 'ai' ? 'model' : 'user',
+            parts: [{ text: h.content }],
+          });
+        }
+      }
+      contents.push({ role: 'user', parts: [{ text: message }] });
+
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            contents,
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 1024,
+            },
+          }),
+          signal: AbortSignal.timeout(15000),
+        },
+      );
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (text) return text;
+      }
+    } catch (e: any) {
+      this.logger.warn(`[AiService] Gemini API call failed: ${e.message}`);
+    }
+    return null;
+  }
+
   async processChat(message: string, history?: { role: string; content: string }[]) {
     const q = message.toLowerCase().trim();
 
@@ -135,6 +179,19 @@ You communicate naturally and fluently in Khmer (ភាសាខ្មែរ) an
 You are warm, polite, and respectful (use proper Khmer polite particles like បាទ/ចាស, សូមស្វាគមន៍).
 You can answer general knowledge questions, chat about everyday topics, write stories or code, explain science, and help users navigate the Spaces app (Marketplace, Reels, Streams, Bakong KHQR, etc.).
 Keep answers concise, direct, helpful, and engaging.`;
+
+      // Try Google Gemini 1.5 Flash cloud API first if GEMINI_API_KEY is configured
+      if (process.env.GEMINI_API_KEY) {
+        const geminiReply = await this.queryGemini(systemPrompt, message, history);
+        if (geminiReply) {
+          return {
+            success: true,
+            reply: geminiReply,
+            model: 'gemini-1.5-flash',
+            isSystemCheck: false,
+          };
+        }
+      }
 
       const formattedMessages: { role: string; content: string }[] = [
         { role: 'system', content: systemPrompt },

@@ -497,6 +497,7 @@ class _PostCardState extends State<PostCard> {
                             videoUrl: candidate,
                             autoPlay: false,
                             isActive: true,
+                            parentTabIndex: 0,
                             showControls: true,
                             fit: BoxFit.contain,
                           ),

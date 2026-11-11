@@ -722,28 +722,51 @@ class ApiService {
       if (error.type == DioExceptionType.connectionError) {
         return 'មិនអាចតភ្ជាប់ទៅកាន់ Server បានទេ សូមពិនិត្យមើលប្រព័ន្ធអ៊ីនធឺណិត';
       }
-      final data = error.response?.data;
+      dynamic data = error.response?.data;
+      if (data is String) {
+        try {
+          data = jsonDecode(data);
+        } catch (_) {}
+      }
       if (data is Map) {
-        if (data['error'] is Map && data['error']['message'] != null) {
-          final m = data['error']['message'].toString();
-          if (m.isNotEmpty) return m;
-        }
         if (data['message'] != null) {
-          final m = data['message'].toString();
-          if (m.isNotEmpty) return m;
+          final m = data['message'];
+          if (m is List && m.isNotEmpty) return m.join(', ');
+          final str = m.toString();
+          if (str.isNotEmpty && str != 'Bad Request') return str;
+        }
+        if (data['error'] is Map && data['error']['message'] != null) {
+          final m = data['error']['message'];
+          if (m is List && m.isNotEmpty) return m.join(', ');
+          final str = m.toString();
+          if (str.isNotEmpty && str != 'Bad Request') return str;
         }
         if (data['error'] is Map && data['error']['localizedMessage'] != null) {
-          final m = data['error']['localizedMessage'].toString();
-          if (m.isNotEmpty) return m;
+          final str = data['error']['localizedMessage'].toString();
+          if (str.isNotEmpty) return str;
+        }
+        if (data['error'] is String && (data['error'] as String).isNotEmpty) {
+          final str = data['error'] as String;
+          if (str != 'Bad Request') return str;
         }
       }
       return fallback;
     }
-    if (error is Map) {
-      if (error['error'] is Map && error['error']['message'] != null) {
-        return error['error']['message'].toString();
+    dynamic errData = error;
+    if (errData is String) {
+      try {
+        errData = jsonDecode(errData);
+      } catch (_) {}
+    }
+    if (errData is Map) {
+      if (errData['message'] != null) {
+        final m = errData['message'];
+        if (m is List && m.isNotEmpty) return m.join(', ');
+        return m.toString();
       }
-      if (error['message'] != null) return error['message'].toString();
+      if (errData['error'] is Map && errData['error']['message'] != null) {
+        return errData['error']['message'].toString();
+      }
     }
     return fallback;
   }

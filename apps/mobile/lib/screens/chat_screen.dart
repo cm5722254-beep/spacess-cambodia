@@ -95,7 +95,95 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  Future<void> _openDirectChatWithUser(String userId) async {
+  Future<void> _openDirectChatWithUser(String userId, {PublicUserModel? userModel}) async {
+    final currentUser = ApiService().currentUser;
+    final isMe = currentUser?.id == userId;
+    if (isMe) return;
+
+    final isAcceptedFriend = _friends.any((f) => f.id == userId) || (currentUser?.isAdmin == true);
+    if (!isAcceptedFriend) {
+      final target = userModel ??
+          _searchResults.where((u) => u.id == userId).firstOrNull ??
+          _incomingRequests.where((u) => u.id == userId).firstOrNull;
+
+      final status = target?.friendStatus ?? 'NONE';
+
+      if (status == 'PENDING_SENT') {
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('ត្រូវការការយល់ព្រមធ្វើមិត្ត'),
+            content: const Padding(
+              padding: EdgeInsets.only(top: 8.0),
+              child: Text('សំណើសុំធ្វើមិត្តត្រូវបានផ្ញើរួចហើយ។ សូមរង់ចាំការយល់ព្រម (Confirm) ពីភាគីម្ខាងទៀតសិន ទើបអាចឆាតបាន។'),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('យល់ព្រម'),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        );
+        return;
+      } else if (status == 'PENDING_RECEIVED' && target != null) {
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('ទទួលសំណើមិត្ត'),
+            content: Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text('${target.name} បានផ្ញើសំណើសុំរាប់អានមិត្តមកអ្នក។ សូមចុចយល់ព្រម (Confirm) ដើម្បីចាប់ផ្តើមជជែកកម្សាន្ត។'),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                isDestructiveAction: true,
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('ទុកពេលក្រោយ'),
+              ),
+              CupertinoDialogAction(
+                isDefaultAction: true,
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _respondFriendReq(target, true);
+                  _openDirectChatWithUser(userId, userModel: target);
+                },
+                child: const Text('យល់ព្រម (Confirm)'),
+              ),
+            ],
+          ),
+        );
+        return;
+      } else {
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('ភ្ជាប់ទំនាក់ទំនងមិត្ត'),
+            content: const Padding(
+              padding: EdgeInsets.only(top: 8.0),
+              child: Text('ដើម្បីសុវត្ថិភាពនិងភាពឯកជន អ្នកត្រូវតែស្នើសុំធ្វើជាមិត្ត (Add Friend) និងទទួលបានការយល់ព្រមសិន ទើបអាចបើកការជជែកផ្ទាល់បាន។'),
+            ),
+            actions: [
+              CupertinoDialogAction(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('បោះបង់'),
+              ),
+              if (target != null)
+                CupertinoDialogAction(
+                  isDefaultAction: true,
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    await _sendFriendReq(target);
+                  },
+                  child: const Text('+ ស្នើសុំមិត្ត (Add Friend)'),
+                ),
+            ],
+          ),
+        );
+        return;
+      }
+    }
+
     if (_isOpeningChat) return;
     setState(() => _isOpeningChat = true);
     final chat = await ApiService().getOrCreateDirectChat(userId);
@@ -456,7 +544,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 minSize: 30,
                 color: const Color(0xFF007AFF),
                 borderRadius: BorderRadius.circular(12),
-                onPressed: () => _openDirectChatWithUser(u.id),
+                onPressed: () => _openDirectChatWithUser(u.id, userModel: u),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [

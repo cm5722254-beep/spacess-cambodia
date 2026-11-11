@@ -232,6 +232,7 @@ class _ReelPageItemState extends State<_ReelPageItem> {
                   videoUrl: videoUrl,
                   autoPlay: widget.isActive,
                   isActive: widget.isActive,
+                  parentTabIndex: 1,
                   isLooping: true,
                   showControls: true,
                   bottomControlsPadding: 84,
