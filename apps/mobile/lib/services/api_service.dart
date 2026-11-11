@@ -1305,16 +1305,22 @@ class ApiService {
     required String videoUrl,
     String? content,
     String? audioTitle,
+    String? location,
+    bool isAiGenerated = false,
+    bool shareToStory = false,
   }) async {
     try {
       final user = currentUser;
       final response = await _dio.post(
         '/reels',
         data: {
-          'authorId': user?.id ?? 'admin-1',
+          'authorId': user?.id,
           'videoUrl': videoUrl,
           'content': content ?? '',
-          'audioTitle': audioTitle ?? 'Original Audio',
+          'audioTitle': audioTitle ?? 'Original Audio - Spaces Cambodia',
+          'location': location,
+          'isAiGenerated': isAiGenerated,
+          'shareToStory': shareToStory,
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {

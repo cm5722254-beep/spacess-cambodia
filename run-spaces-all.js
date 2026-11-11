@@ -6,6 +6,23 @@ const zlib = require('zlib');
 
 console.log('=== STARTING SPACES SOCIAL MEDIA CAMBODIA SERVICES ===');
 
+// 0. Ensure Local Ollama AI Service is running with models on D:\ollama-models
+http.get('http://127.0.0.1:11434/api/tags', (res) => {
+  console.log('[Ollama] Local AI service is active on port 11434.');
+}).on('error', () => {
+  console.log('[Ollama] Starting local Ollama service (D:\\ollama-models)...');
+  try {
+    const ollama = spawn('ollama', ['serve'], {
+      env: { ...process.env, OLLAMA_MODELS: 'D:\\ollama-models' },
+      detached: true,
+      stdio: 'ignore',
+    });
+    ollama.unref();
+  } catch (e) {
+    console.warn('[Ollama] Could not auto-start ollama:', e.message);
+  }
+});
+
 // 1. Start Backend NestJS Server
 const backend = spawn('node', ['dist/main.js'], {
   cwd: path.join(__dirname, 'apps', 'backend'),

@@ -131,7 +131,7 @@ class _VipSubscriptionSheetState extends State<VipSubscriptionSheet> {
   }
 
   Widget _buildQrImageWidget(String? base64String) {
-    if (base64String == null || base64String.isEmpty) {
+    if (base64String == null || base64String.trim().isEmpty) {
       return Container(
         width: 170,
         height: 170,
@@ -142,11 +142,41 @@ class _VipSubscriptionSheetState extends State<VipSubscriptionSheet> {
       );
     }
 
+    final trimmed = base64String.trim();
+    if (trimmed.startsWith('http')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          trimmed,
+          width: 180,
+          height: 180,
+          fit: BoxFit.contain,
+        ),
+      );
+    }
+
+    if (!trimmed.startsWith('data:image') && !trimmed.contains(',') && trimmed.length > 50 && trimmed.startsWith('000201')) {
+      final qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${Uri.encodeComponent(trimmed)}';
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          qrUrl,
+          width: 180,
+          height: 180,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Center(
+            child: Icon(CupertinoIcons.qrcode, size: 80, color: CupertinoColors.systemGrey),
+          ),
+        ),
+      );
+    }
+
     try {
-      String cleanBase64 = base64String;
+      String cleanBase64 = trimmed;
       if (cleanBase64.contains(',')) {
         cleanBase64 = cleanBase64.split(',')[1];
       }
+      cleanBase64 = cleanBase64.replaceAll('\n', '').replaceAll('\r', '').replaceAll(' ', '');
       final bytes = base64Decode(cleanBase64);
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
@@ -158,12 +188,17 @@ class _VipSubscriptionSheetState extends State<VipSubscriptionSheet> {
         ),
       );
     } catch (e) {
-      return Container(
-        width: 170,
-        height: 170,
-        color: CupertinoColors.systemGrey6,
-        child: const Center(
-          child: Icon(CupertinoIcons.exclamationmark_triangle, size: 40, color: CupertinoColors.systemRed),
+      final qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${Uri.encodeComponent(trimmed)}';
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          qrUrl,
+          width: 180,
+          height: 180,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Center(
+            child: Icon(CupertinoIcons.qrcode, size: 80, color: CupertinoColors.systemGrey),
+          ),
         ),
       );
     }
@@ -503,7 +538,7 @@ class _VipSubscriptionSheetState extends State<VipSubscriptionSheet> {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        _buildQrImageWidget(_checkoutData?['qrImage'] as String?),
+                        _buildQrImageWidget((_checkoutData?['qrImage'] ?? _checkoutData?['qrString'] ?? _checkoutData?['qr']) as String?),
                         const SizedBox(height: 8),
                         Text(
                           'CHAN SOCHEAT',

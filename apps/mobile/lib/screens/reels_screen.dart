@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../services/language_service.dart';
-import '../services/theme_service.dart';
 import '../widgets/comments_sheet.dart';
+import '../widgets/create_reel_sheet.dart';
 import '../widgets/liquid_glass.dart';
 import '../widgets/media_image_view.dart';
 import '../widgets/web_video_player.dart';
-import '../utils/media_picker_helper.dart';
 
 class ReelsScreen extends StatefulWidget {
   const ReelsScreen({super.key});
@@ -48,157 +47,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 
   void _openCreateReelDialog() {
-    final videoUrlCtrl = TextEditingController();
-    final captionCtrl = TextEditingController();
-    final audioCtrl = TextEditingController();
-    bool isPickingVideo = false;
-
-    showCupertinoModalPopup(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => Container(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-            top: 16,
-            left: 20,
-            right: 20,
-          ),
-          decoration: BoxDecoration(
-            color: AppTheme.modalBg,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: CupertinoColors.systemGrey4,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Text(
-                  tr('បង្ហោះ Reels វីដេអូខ្លី (Post Reel)', 'Post Short Video Reel'),
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.primaryText,
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // 1-Tap Pick from Phone Gallery
-                CupertinoButton(
-                  color: const Color(0xFFFF2D55).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(14),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  onPressed: isPickingVideo
-                      ? null
-                      : () async {
-                          setDialogState(() => isPickingVideo = true);
-                          final liveUrl = await MediaPickerHelper.pickAndUploadMedia(accept: 'video/*');
-                          setDialogState(() {
-                            isPickingVideo = false;
-                            if (liveUrl != null && liveUrl.isNotEmpty) {
-                              videoUrlCtrl.text = liveUrl;
-                            }
-                          });
-                        },
-                  child: isPickingVideo
-                      ? const CupertinoActivityIndicator()
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(CupertinoIcons.videocam_fill, size: 22, color: Color(0xFFFF2D55)),
-                            const SizedBox(width: 8),
-                            Text(
-                              tr('ជ្រើសរើសវីដេអូពីទូរស័ព្ទ / ឧបករណ៍', 'Pick Video from Phone Gallery'),
-                              style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFFFF2D55)),
-                            ),
-                          ],
-                        ),
-                ),
-                const SizedBox(height: 12),
-
-                Text(
-                  tr('ឬ តំណភ្ជាប់វីដេអូ (Or Video URL):', 'Or Video URL:'),
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                ),
-                const SizedBox(height: 6),
-                CupertinoTextField(
-                  controller: videoUrlCtrl,
-                  placeholder: tr('តំណភ្ជាប់វីដេអូ ឬជ្រើសរើសខាងលើ...', 'Video URL or select above...'),
-                  padding: const EdgeInsets.all(12),
-                  style: TextStyle(color: AppTheme.primaryText),
-                  decoration: BoxDecoration(
-                    color: AppTheme.fieldBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  tr('សាររៀបរាប់ (Caption):', 'Caption:'),
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                ),
-                const SizedBox(height: 6),
-                CupertinoTextField(
-                  controller: captionCtrl,
-                  placeholder: tr('សរសេរចំណងជើងវីដេអូ...', 'Write reel caption...'),
-                  padding: const EdgeInsets.all(12),
-                  style: TextStyle(color: AppTheme.primaryText),
-                  decoration: BoxDecoration(
-                    color: AppTheme.fieldBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  tr('តន្ត្រី / សំឡេង (Audio Title):', 'Audio / Music Track:'),
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primaryText),
-                ),
-                const SizedBox(height: 6),
-                CupertinoTextField(
-                  controller: audioCtrl,
-                  placeholder: 'Original Audio - Spaces Cambodia',
-                  padding: const EdgeInsets.all(12),
-                  style: TextStyle(color: AppTheme.primaryText),
-                  decoration: BoxDecoration(
-                    color: AppTheme.fieldBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                CupertinoButton.filled(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Text(
-                    tr('បង្ហោះ Reels ឥឡូវនេះ (Publish Reel)', 'Publish Reel Now'),
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  onPressed: () async {
-                    if (videoUrlCtrl.text.trim().isEmpty) return;
-                    Navigator.pop(ctx);
-                    await _api.createReel(
-                      videoUrl: videoUrlCtrl.text.trim(),
-                      content: captionCtrl.text.trim(),
-                      audioTitle: audioCtrl.text.trim().isEmpty ? null : audioCtrl.text.trim(),
-                    );
-                    _loadReels();
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    CreateReelSheet.show(context, onReelCreated: _loadReels);
   }
 
   @override

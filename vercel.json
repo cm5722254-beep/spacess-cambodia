@@ -24,11 +24,11 @@
     },
     {
       "source": "/api/(.*)",
-      "destination": "https://ron-recreational-months-seasons.trycloudflare.com/api/$1"
+      "destination": "https://comes-halifax-yea-brooklyn.trycloudflare.com/api/$1"
     },
     {
       "source": "/uploads/(.*)",
-      "destination": "https://ron-recreational-months-seasons.trycloudflare.com/uploads/$1"
+      "destination": "https://comes-halifax-yea-brooklyn.trycloudflare.com/uploads/$1"
     },
     {
       "source": "/(.*)",

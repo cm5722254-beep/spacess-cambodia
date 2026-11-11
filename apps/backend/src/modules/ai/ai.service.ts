@@ -1,16 +1,42 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { DbService } from '../database/db.service';
 import * as fs from 'fs';
 import * as path from 'path';
 
 @Injectable()
 export class AiService {
-  constructor(private readonly db: DbService) {}
+  private readonly logger = new Logger(AiService.name);
+  private readonly OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://127.0.0.1:11434';
+  private preferredModel = 'qwen2.5:1.5b';
+
+  constructor(private readonly db: DbService) {
+    this.detectAvailableModel();
+  }
+
+  private async detectAvailableModel() {
+    try {
+      const res = await fetch(`${this.OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
+        const data = await res.json();
+        const models = (data.models || []).map((m: any) => m.name);
+        if (models.some((m: string) => m.startsWith('qwen2.5:3b'))) {
+          this.preferredModel = 'qwen2.5:3b';
+        } else if (models.some((m: string) => m.startsWith('qwen2.5:1.5b'))) {
+          this.preferredModel = 'qwen2.5:1.5b';
+        } else if (models.length > 0) {
+          this.preferredModel = models[0];
+        }
+        this.logger.log(`[AiService] Ollama connected. Active model: ${this.preferredModel}`);
+      }
+    } catch {
+      this.logger.warn(`[AiService] Ollama not reachable on ${this.OLLAMA_HOST}, fallback rules active.`);
+    }
+  }
 
   async processChat(message: string, history?: { role: string; content: string }[]) {
     const q = message.toLowerCase().trim();
 
-    // 1. SYSTEM DIAGNOSTICS & HEALTH CHECK
+    // 1. SYSTEM DIAGNOSTICS & HEALTH CHECK TOOL
     if (
       q.includes('system') ||
       q.includes('health') ||
@@ -39,10 +65,19 @@ export class AiService {
         bakongLive = true;
       }
 
+      let ollamaLive = false;
+      try {
+        const res = await fetch(`${this.OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(1500) });
+        ollamaLive = res.ok;
+      } catch {
+        ollamaLive = false;
+      }
+
       const report = 
 `របាយការណ៍ត្រួតពិនិត្យប្រព័ន្ធ Spaces Cambodia (System Health Diagnosis):
 --------------------------------------------------
 - ស្ថានភាពប្រព័ន្ធទូទៅ: ដំណើរការយ៉ាងរលូន (Operational 100%)
+- ម៉ូឌែល Local AI (Ollama): ${ollamaLive ? `ភ្ជាប់ជោគជ័យ (${this.preferredModel})` : 'Standby'}
 - ចំនួនគណនីចុះឈ្មោះសរុប: ${stats.totalUsers} គណនី
 - ការបង្ហោះលើ Feed (Posts): ${stats.totalPosts} ការផុស
 - វីដេអូ & Live Streams: ${stats.totalStreams || 0} វីដេអូ
@@ -62,6 +97,8 @@ export class AiService {
           uploadFilesCount: uploadCount,
           memoryMb: memMb,
           bakongLive,
+          ollamaLive,
+          model: this.preferredModel,
         },
       };
     }
@@ -91,7 +128,68 @@ export class AiService {
       };
     }
 
-    // 3. MARKETPLACE & SELLING
+    // 3. TRY REAL LOCAL OLLAMA LLM FOR CONVERSATION
+    try {
+      const systemPrompt = `You are Spaces AI, an intelligent, helpful, and friendly Cambodian AI assistant built into Spaces Social Media Cambodia.
+You communicate naturally and fluently in Khmer (ភាសាខ្មែរ) and English.
+You are warm, polite, and respectful (use proper Khmer polite particles like បាទ/ចាស, សូមស្វាគមន៍).
+You can answer general knowledge questions, chat about everyday topics, write stories or code, explain science, and help users navigate the Spaces app (Marketplace, Reels, Streams, Bakong KHQR, etc.).
+Keep answers concise, direct, helpful, and engaging.`;
+
+      const formattedMessages: { role: string; content: string }[] = [
+        { role: 'system', content: systemPrompt },
+      ];
+
+      if (history && Array.isArray(history)) {
+        for (const h of history.slice(-6)) {
+          if (h.role && h.content) {
+            formattedMessages.push({
+              role: h.role === 'assistant' || h.role === 'ai' ? 'assistant' : 'user',
+              content: h.content,
+            });
+          }
+        }
+      }
+
+      formattedMessages.push({ role: 'user', content: message });
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+
+      const ollamaRes = await fetch(`${this.OLLAMA_HOST}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.preferredModel,
+          messages: formattedMessages,
+          stream: false,
+          options: {
+            temperature: 0.7,
+            num_ctx: 2048,
+          },
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeout);
+
+      if (ollamaRes.ok) {
+        const data = await ollamaRes.json();
+        const content = data.message?.content?.trim();
+        if (content && content.length > 0) {
+          return {
+            success: true,
+            reply: content,
+            model: this.preferredModel,
+            isSystemCheck: false,
+          };
+        }
+      }
+    } catch (llmErr: any) {
+      this.logger.warn(`[AiService] Ollama generation failed: ${llmErr?.message}. Falling back to default assistant.`);
+    }
+
+    // 4. FALLBACK ASSISTANT RESPONSES
     if (
       q.includes('លក់') ||
       q.includes('ទិញ') ||
@@ -111,7 +209,6 @@ export class AiService {
       };
     }
 
-    // 4. STREAMING & VIDEO WATCH
     if (
       q.includes('stream') ||
       q.includes('video') ||
@@ -131,7 +228,6 @@ export class AiService {
       };
     }
 
-    // 5. GENERAL AI KNOWLEDGE & ASSISTANT
     return {
       success: true,
       reply: 
@@ -141,9 +237,9 @@ export class AiService {
 • ណែនាំអំពីការដោះសោសញ្ញា Blue Checkmark និងការទូទាត់ Bakong KHQR
 • ការបង្កើតហាង និងបង្ហោះលក់ទំនិញលើ Marketplace
 • របៀបបង្ហោះវីដេអូ Streams, Reels និង Story
+• សន្ទនាទូទៅជាភាសាខ្មែរ និងអង់គ្លេស
 តើខ្ញុំអាចជួយអ្វីដល់លោកអ្នកបន្ថែមទៀតទេបាទ?`,
       isSystemCheck: false,
     };
   }
 }
-

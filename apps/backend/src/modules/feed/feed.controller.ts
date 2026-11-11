@@ -83,6 +83,9 @@ export class FeedController {
       videoUrl: string;
       content?: string;
       audioTitle?: string;
+      location?: string;
+      isAiGenerated?: boolean;
+      shareToStory?: boolean;
     },
   ) {
     const actingUserId = this.resolveActingUserId(authHeader, body.authorId);

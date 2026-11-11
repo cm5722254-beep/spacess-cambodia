@@ -398,19 +398,41 @@ export class FeedService {
     return raw.map((p) => this.toPostItem(p, currentUserId));
   }
 
-  createReel(dto: { authorId?: string; videoUrl: string; content?: string; audioTitle?: string }) {
+  createReel(dto: {
+    authorId?: string;
+    videoUrl: string;
+    content?: string;
+    audioTitle?: string;
+    location?: string;
+    isAiGenerated?: boolean;
+    shareToStory?: boolean;
+  }) {
     const authorId = dto.authorId || 'admin-1';
+    const city = dto.location || 'Cambodia';
+    let content = dto.content || '';
+    if (dto.isAiGenerated && !content.includes('#AI')) {
+      content = `[AI Created] ${content}`.trim();
+    }
     const reel = this.db.createPost({
       authorId,
-      content: dto.content || '',
+      content,
       spaceId: 'public',
       circleName: 'Reels',
-      city: 'Cambodia',
+      city,
       videoUrl: dto.videoUrl,
       mediaType: 'video',
       isReel: true,
       reelAudioTitle: dto.audioTitle || 'Original Audio',
     });
+
+    if (dto.shareToStory) {
+      try {
+        this.db.createStory(authorId, dto.videoUrl, content.substring(0, 80));
+      } catch (err) {
+        console.warn('Failed to mirror reel to story:', err);
+      }
+    }
+
     return this.toPostItem(reel, authorId);
   }
 

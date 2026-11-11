@@ -84,8 +84,12 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
     });
   }
 
-  Widget _buildQrImage(String rawImage) {
-    if (rawImage.isEmpty) {
+  Widget _buildQrImage(String rawImage, [String? fallbackQrString]) {
+    String effectiveQr = rawImage.trim();
+    if (effectiveQr.isEmpty && fallbackQrString != null) {
+      effectiveQr = fallbackQrString.trim();
+    }
+    if (effectiveQr.isEmpty) {
       return Container(
         width: 220,
         height: 220,
@@ -106,22 +110,35 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
       );
     }
     try {
-      if (rawImage.startsWith('data:image')) {
-        final comma = rawImage.indexOf(',');
-        final base64Str = comma != -1 ? rawImage.substring(comma + 1) : rawImage;
-        final bytes = base64Decode(base64Str);
+      if (effectiveQr.startsWith('data:image')) {
+        final comma = effectiveQr.indexOf(',');
+        final base64Str = comma != -1 ? effectiveQr.substring(comma + 1).trim() : effectiveQr.trim();
+        final cleaned = base64Str.replaceAll('\n', '').replaceAll('\r', '').replaceAll(' ', '');
+        final bytes = base64Decode(cleaned);
         return Image.memory(
           bytes,
           width: 220,
           height: 220,
           fit: BoxFit.contain,
         );
-      } else if (rawImage.startsWith('http')) {
+      } else if (effectiveQr.startsWith('http')) {
         return Image.network(
-          rawImage,
+          effectiveQr,
           width: 220,
           height: 220,
           fit: BoxFit.contain,
+        );
+      } else {
+        // EMVCo raw KHQR string fallback -> render via dynamic QR service
+        final qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=8&data=${Uri.encodeComponent(effectiveQr)}';
+        return Image.network(
+          qrUrl,
+          width: 220,
+          height: 220,
+          fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) => const Center(
+            child: Icon(CupertinoIcons.qrcode, size: 90, color: Color(0xFFE1251B)),
+          ),
         );
       }
     } catch (e) {
@@ -339,6 +356,7 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
             : widget.product.sellerName);
     final bakongId = checkoutData?['sellerBakongId'] ?? widget.product.sellerBakongId ?? '';
     final qrImg = checkoutData?['qrImage'] ?? checkoutData?['data']?['qrImage'] ?? '';
+    final qrStr = checkoutData?['qrString'] ?? checkoutData?['qr'] ?? checkoutData?['data']?['qrString'] ?? checkoutData?['data']?['qr'] ?? '';
     final deeplink = checkoutData?['deeplink'] ?? '';
 
     return SingleChildScrollView(
@@ -429,7 +447,7 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
                 const SizedBox(height: 12),
 
                 // QR Image
-                _buildQrImage(qrImg),
+                _buildQrImage(qrImg, qrStr),
 
                 const SizedBox(height: 12),
                 Text(

@@ -491,7 +491,7 @@ class LiquidGlassSegmentItem<T> {
   });
 }
 
-class LiquidGlassSegmentControl<T> extends StatelessWidget {
+class LiquidGlassSegmentControl<T> extends StatefulWidget {
   final T groupValue;
   final List<LiquidGlassSegmentItem<T>> items;
   final ValueChanged<T> onValueChanged;
@@ -504,9 +504,24 @@ class LiquidGlassSegmentControl<T> extends StatelessWidget {
   });
 
   @override
+  State<LiquidGlassSegmentControl<T>> createState() => _LiquidGlassSegmentControlState<T>();
+}
+
+class _LiquidGlassSegmentControlState<T> extends State<LiquidGlassSegmentControl<T>> {
+  double? _dragX;
+  bool _isDragging = false;
+
+  int _indexFromPosition(double localX, double totalWidth) {
+    if (widget.items.isEmpty || totalWidth <= 0) return 0;
+    final slotW = totalWidth / widget.items.length;
+    final idx = (localX / slotW).floor();
+    return idx.clamp(0, widget.items.length - 1);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final dark = AppTheme.isDark;
-    final activeIdx = items.indexWhere((i) => i.value == groupValue).clamp(0, items.length - 1);
+    final activeIdx = widget.items.indexWhere((i) => i.value == widget.groupValue).clamp(0, widget.items.length - 1);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
@@ -532,89 +547,129 @@ class LiquidGlassSegmentControl<T> extends StatelessWidget {
           ),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final segWidth = constraints.maxWidth / items.length;
-              return Stack(
-                children: [
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 260),
-                    curve: Curves.easeOutBack,
-                    left: activeIdx * segWidth,
-                    top: 0,
-                    bottom: 0,
-                    width: segWidth,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: dark
-                              ? [
-                                  Colors.white.withValues(alpha: 0.20),
-                                  Colors.white.withValues(alpha: 0.11),
-                                ]
-                              : [
-                                  Colors.white,
-                                  const Color(0xFFF1F5F9),
-                                ],
-                        ),
-                        border: Border.all(
-                          color: dark
-                              ? Colors.white.withValues(alpha: 0.26)
-                              : Colors.white,
-                          width: 0.9,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: dark ? 0.35 : 0.08),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+              final totalW = constraints.maxWidth;
+              final segWidth = totalW / widget.items.length;
+
+              double indicatorLeft;
+              if (_isDragging && _dragX != null) {
+                indicatorLeft = (_dragX! - segWidth / 2).clamp(0.0, totalW - segWidth);
+              } else {
+                indicatorLeft = activeIdx * segWidth;
+              }
+
+              return GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (details) {
+                  setState(() {
+                    _isDragging = true;
+                    _dragX = details.localPosition.dx;
+                  });
+                },
+                onHorizontalDragUpdate: (details) {
+                  setState(() {
+                    _dragX = details.localPosition.dx;
+                  });
+                },
+                onHorizontalDragEnd: (details) {
+                  if (_dragX != null) {
+                    final targetIdx = _indexFromPosition(_dragX!, totalW);
+                    widget.onValueChanged(widget.items[targetIdx].value);
+                  }
+                  setState(() {
+                    _isDragging = false;
+                    _dragX = null;
+                  });
+                },
+                onHorizontalDragCancel: () {
+                  setState(() {
+                    _isDragging = false;
+                    _dragX = null;
+                  });
+                },
+                child: Stack(
+                  children: [
+                    // Fluid Specular Water-Droplet Indicator
+                    AnimatedPositioned(
+                      duration: _isDragging ? Duration.zero : const Duration(milliseconds: 260),
+                      curve: Curves.easeOutBack,
+                      left: indicatorLeft,
+                      top: 0,
+                      bottom: 0,
+                      width: segWidth,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: dark
+                                ? [
+                                    Colors.white.withValues(alpha: _isDragging ? 0.30 : 0.20),
+                                    Colors.white.withValues(alpha: _isDragging ? 0.18 : 0.11),
+                                  ]
+                                : [
+                                    Colors.white,
+                                    _isDragging ? const Color(0xFFE2E8F0) : const Color(0xFFF1F5F9),
+                                  ],
                           ),
-                        ],
+                          border: Border.all(
+                            color: dark
+                                ? Colors.white.withValues(alpha: 0.32)
+                                : Colors.white,
+                            width: 1.1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: dark ? 0.40 : 0.10),
+                              blurRadius: _isDragging ? 12 : 8,
+                              offset: Offset(0, _isDragging ? 4 : 2),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  Row(
-                    children: items.map((item) {
-                      final active = item.value == groupValue;
-                      return Expanded(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => onValueChanged(item.value),
-                          child: Center(
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 6),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (item.icon != null) ...[
-                                      Icon(
-                                        item.icon,
-                                        size: 14,
-                                        color: active ? AppTheme.primaryText : AppTheme.secondaryText,
+                    Row(
+                      children: widget.items.map((item) {
+                        final active = item.value == widget.groupValue;
+                        return Expanded(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () => widget.onValueChanged(item.value),
+                            child: Center(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 6),
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (item.icon != null) ...[
+                                        Icon(
+                                          item.icon,
+                                          size: 14,
+                                          color: active ? AppTheme.primaryText : AppTheme.secondaryText,
+                                        ),
+                                        const SizedBox(width: 5),
+                                      ],
+                                      Text(
+                                        item.label,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                                          color: active ? AppTheme.primaryText : AppTheme.secondaryText,
+                                        ),
                                       ),
-                                      const SizedBox(width: 5),
                                     ],
-                                    Text(
-                                      item.label,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                                        color: active ? AppTheme.primaryText : AppTheme.secondaryText,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -638,7 +693,7 @@ class LiquidGlassDockItem {
   });
 }
 
-class LiquidGlassDockBar extends StatelessWidget {
+class LiquidGlassDockBar extends StatefulWidget {
   final int currentIndex;
   final List<LiquidGlassDockItem> items;
   final ValueChanged<int> onTap;
@@ -649,6 +704,21 @@ class LiquidGlassDockBar extends StatelessWidget {
     required this.items,
     required this.onTap,
   });
+
+  @override
+  State<LiquidGlassDockBar> createState() => _LiquidGlassDockBarState();
+}
+
+class _LiquidGlassDockBarState extends State<LiquidGlassDockBar> {
+  double? _dragX;
+  bool _isDragging = false;
+
+  int _indexFromPosition(double localX, double totalWidth) {
+    if (widget.items.isEmpty || totalWidth <= 0) return 0;
+    final slotW = totalWidth / widget.items.length;
+    final idx = (localX / slotW).floor();
+    return idx.clamp(0, widget.items.length - 1);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -696,120 +766,166 @@ class LiquidGlassDockBar extends StatelessWidget {
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final slotW = constraints.maxWidth / items.length;
-                final activeIsCreate = items[currentIndex].isCreateButton;
-                return Stack(
-                  children: [
-                    if (!activeIsCreate)
-                      AnimatedPositioned(
-                        duration: const Duration(milliseconds: 280),
-                        curve: Curves.easeOutBack,
-                        left: currentIndex * slotW + 2,
-                        top: 2,
-                        bottom: 2,
-                        width: slotW - 4,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(26),
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: dark
-                                  ? [
-                                      AppTheme.accentBlue.withValues(alpha: 0.28),
-                                      AppTheme.accentBlue.withValues(alpha: 0.14),
-                                    ]
-                                  : [
-                                      AppTheme.accentBlue.withValues(alpha: 0.15),
-                                      AppTheme.accentBlue.withValues(alpha: 0.08),
-                                    ],
-                            ),
-                            border: Border.all(
-                              color: AppTheme.accentBlue.withValues(alpha: dark ? 0.45 : 0.25),
-                              width: 0.9,
-                            ),
-                          ),
-                        ),
-                      ),
-                    Row(
-                      children: List.generate(items.length, (i) {
-                        final item = items[i];
-                        final selected = i == currentIndex;
-                        if (item.isCreateButton) {
-                          return Expanded(
-                            child: LiquidGlassPressable(
-                              pressedScale: 0.90,
-                              onTap: () => onTap(i),
-                              child: Center(
-                                child: Container(
-                                  width: compact ? 44 : 48,
-                                  height: compact ? 44 : 48,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        AppTheme.accentBlue,
-                                        AppTheme.accentIndigo,
-                                      ],
-                                    ),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.55),
-                                      width: 1.3,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppTheme.accentBlue.withValues(alpha: 0.42),
-                                        blurRadius: 14,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Icon(item.icon, color: Colors.white, size: compact ? 24 : 26),
-                                ),
-                              ),
-                            ),
-                          );
-                        }
+                final totalW = constraints.maxWidth;
+                final slotW = totalW / widget.items.length;
+                final activeIsCreate = widget.items[widget.currentIndex].isCreateButton;
 
-                        final color = selected ? AppTheme.accentBlue : AppTheme.secondaryText;
-                        return Expanded(
-                          child: LiquidGlassPressable(
-                            pressedScale: 0.92,
-                            onTap: () => onTap(i),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  selected ? item.activeIcon : item.icon,
-                                  size: compact ? 20 : 22,
-                                  color: color,
-                                ),
-                                const SizedBox(height: 2),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      item.label,
-                                      maxLines: 1,
-                                      style: TextStyle(
-                                        fontSize: compact ? 9.5 : 10.5,
-                                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                        color: color,
-                                        letterSpacing: -0.2,
-                                      ),
-                                    ),
-                                  ),
+                double indicatorLeft;
+                if (_isDragging && _dragX != null) {
+                  indicatorLeft = (_dragX! - slotW / 2).clamp(2.0, totalW - slotW + 2);
+                } else {
+                  indicatorLeft = widget.currentIndex * slotW + 2;
+                }
+
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onHorizontalDragStart: (details) {
+                    setState(() {
+                      _isDragging = true;
+                      _dragX = details.localPosition.dx;
+                    });
+                  },
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      _dragX = details.localPosition.dx;
+                    });
+                  },
+                  onHorizontalDragEnd: (details) {
+                    if (_dragX != null) {
+                      final targetIdx = _indexFromPosition(_dragX!, totalW);
+                      widget.onTap(targetIdx);
+                    }
+                    setState(() {
+                      _isDragging = false;
+                      _dragX = null;
+                    });
+                  },
+                  onHorizontalDragCancel: () {
+                    setState(() {
+                      _isDragging = false;
+                      _dragX = null;
+                    });
+                  },
+                  child: Stack(
+                    children: [
+                      if (!activeIsCreate || _isDragging)
+                        AnimatedPositioned(
+                          duration: _isDragging ? Duration.zero : const Duration(milliseconds: 280),
+                          curve: Curves.easeOutBack,
+                          left: indicatorLeft,
+                          top: 2,
+                          bottom: 2,
+                          width: slotW - 4,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(26),
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: dark
+                                    ? [
+                                        AppTheme.accentBlue.withValues(alpha: _isDragging ? 0.38 : 0.28),
+                                        AppTheme.accentBlue.withValues(alpha: _isDragging ? 0.22 : 0.14),
+                                      ]
+                                    : [
+                                        AppTheme.accentBlue.withValues(alpha: _isDragging ? 0.22 : 0.15),
+                                        AppTheme.accentBlue.withValues(alpha: _isDragging ? 0.12 : 0.08),
+                                      ],
+                              ),
+                              border: Border.all(
+                                color: AppTheme.accentBlue.withValues(alpha: dark ? 0.55 : 0.35),
+                                width: 1.1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppTheme.accentBlue.withValues(alpha: dark ? 0.35 : 0.18),
+                                  blurRadius: _isDragging ? 16 : 8,
+                                  offset: const Offset(0, 3),
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      }),
-                    ),
-                  ],
+                        ),
+                      Row(
+                        children: List.generate(widget.items.length, (i) {
+                          final item = widget.items[i];
+                          final selected = i == widget.currentIndex;
+                          if (item.isCreateButton) {
+                            return Expanded(
+                              child: LiquidGlassPressable(
+                                pressedScale: 0.90,
+                                onTap: () => widget.onTap(i),
+                                child: Center(
+                                  child: Container(
+                                    width: compact ? 44 : 48,
+                                    height: compact ? 44 : 48,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          AppTheme.accentBlue,
+                                          AppTheme.accentIndigo,
+                                        ],
+                                      ),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: 0.55),
+                                        width: 1.3,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: AppTheme.accentBlue.withValues(alpha: 0.42),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Icon(item.icon, color: Colors.white, size: compact ? 24 : 26),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          final color = selected ? AppTheme.accentBlue : AppTheme.secondaryText;
+                          return Expanded(
+                            child: LiquidGlassPressable(
+                              pressedScale: 0.92,
+                              onTap: () => widget.onTap(i),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    selected ? item.activeIcon : item.icon,
+                                    size: compact ? 20 : 22,
+                                    color: color,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        item.label,
+                                        maxLines: 1,
+                                        style: TextStyle(
+                                          fontSize: compact ? 9.5 : 10.5,
+                                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                          color: color,
+                                          letterSpacing: -0.2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),

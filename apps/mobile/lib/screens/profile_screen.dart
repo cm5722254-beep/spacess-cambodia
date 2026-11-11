@@ -1,13 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors;
 import '../models/post_model.dart';
-import '../models/stream_model.dart';
 import '../services/api_service.dart';
 import '../services/language_service.dart';
 import '../services/theme_service.dart';
 import '../utils/media_picker_helper.dart';
 import '../widgets/post_card.dart';
 import '../widgets/comments_sheet.dart';
+import '../widgets/create_post_sheet.dart';
+import '../widgets/create_reel_sheet.dart';
 import '../widgets/media_image_view.dart';
 import '../widgets/vip_subscription_sheet.dart';
 import '../widgets/liquid_glass.dart';
@@ -27,9 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   List<PostModel> _myPosts = [];
   List<PostModel> _savedPosts = [];
-  List<StreamModel> _userStreams = [];
   bool _isLoadingPosts = false;
-  bool _isLoadingStreams = false;
 
   @override
   void initState() {
@@ -47,22 +46,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isLoadingPosts = false;
         });
       }
-    } else if (_selectedTab == 2) {
+    } else if (_selectedTab == 5) {
       setState(() => _isLoadingPosts = true);
       final posts = await _api.fetchSavedPosts();
       if (mounted) {
         setState(() {
           _savedPosts = posts;
           _isLoadingPosts = false;
-        });
-      }
-    } else if (_selectedTab == 3) {
-      setState(() => _isLoadingStreams = true);
-      final streams = await _api.fetchStreams(authorId: _api.currentUser?.id);
-      if (mounted) {
-        setState(() {
-          _userStreams = streams;
-          _isLoadingStreams = false;
         });
       }
     }
@@ -864,6 +854,181 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _openCreateMenuSheet() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('បង្កើតមាតិកាថ្មី (Create Content)', style: TextStyle(fontWeight: FontWeight.w700)),
+        actions: [
+          CupertinoActionSheetAction(
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(CupertinoIcons.square_pencil, color: Color(0xFF007AFF)),
+                SizedBox(width: 8),
+                Text('បង្កើតការបង្ហោះថ្មី (New Post)'),
+              ],
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              CreatePostSheet.show(
+                context,
+                spaces: [],
+                onPostCreated: (_) => _loadTabContent(),
+              );
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(CupertinoIcons.film, color: Color(0xFFFF2D55)),
+                SizedBox(width: 8),
+                Text('បង្កើតវីដេអូខ្លី Reel (Create Reel)'),
+              ],
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              CreateReelSheet.show(
+                context,
+                onReelCreated: _loadTabContent,
+              );
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(CupertinoIcons.camera, color: Color(0xFF34C759)),
+                SizedBox(width: 8),
+                Text('បង្កើតរឿង Story (Add Story)'),
+              ],
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _pickAndUploadAvatar();
+            },
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('បោះបង់ (Cancel)'),
+        ),
+      ),
+    );
+  }
+
+  void _openCreatorDashboardSheet() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => LiquidGlassSheet(
+        initialHeightFraction: 0.75,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Text(
+                  'ផ្ទាំងគ្រប់គ្រងអ្នកបង្កើត (Professional Dashboard)',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.primaryText),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF007AFF).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF007AFF).withOpacity(0.3)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildStatCol('627', 'អ្នកតាមដាន'),
+                    _buildStatCol('244', 'កំពុងតាមដាន'),
+                    _buildStatCol('12.8K', 'ការចូលមើល'),
+                    _buildStatCol('\$48.50', 'ចំណូល Bakong'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'ឧបករណ៍គ្រប់គ្រង (Creator Tools):',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.primaryText),
+              ),
+              const SizedBox(height: 10),
+              CupertinoListTile(
+                leading: const Icon(CupertinoIcons.chart_bar_alt_fill, color: Color(0xFF007AFF)),
+                title: const Text('ស្ថិតិ & ទស្សនិកជន (Insights)'),
+                trailing: const Icon(CupertinoIcons.chevron_forward, size: 16),
+                onTap: () => Navigator.pop(ctx),
+              ),
+              CupertinoListTile(
+                leading: const Icon(CupertinoIcons.bag_fill, color: Color(0xFF34C759)),
+                title: const Text('ការទូទាត់ Bakong KHQR (Payouts)'),
+                trailing: const Icon(CupertinoIcons.chevron_forward, size: 16),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openStoreSettingsSheet();
+                },
+              ),
+              CupertinoListTile(
+                leading: const Icon(CupertinoIcons.rosette, color: Color(0xFFFF9500)),
+                title: const Text('សញ្ញាផ្ទៀងផ្ទាត់ផ្លូវការ (Blue Checkmark VIP)'),
+                trailing: const Icon(CupertinoIcons.chevron_forward, size: 16),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openVipModal();
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionChip(IconData icon, String label, VoidCallback onTap) {
+    final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppTheme.border, width: 0.8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: AppTheme.primaryText),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.primaryText,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatCol(String val, String label) {
+    return Column(
+      children: [
+        Text(val, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF007AFF))),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(fontSize: 11, color: AppTheme.secondaryText)),
+      ],
+    );
+  }
+
   void _openSettingsDrawerSheet() {
     final user = _api.currentUser;
     final isAdmin = user?.isAdmin ?? false;
@@ -889,6 +1054,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: Column(
                   children: [
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.person_crop_circle_fill, color: Color(0xFF007AFF), size: 20),
+                      title: Text(tr('កែសម្រួលព័ត៌មាន Profile', 'Edit Profile Info')),
+                      subtitle: Text(user?.name ?? 'Name, Bio, Phone, Location'),
+                      trailing: const Icon(CupertinoIcons.chevron_right, size: 17),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _openEditProfileSheet();
+                      },
+                    ),
                     CupertinoListTile(
                       leading: const Icon(CupertinoIcons.bag_fill, color: Color(0xFFE1251B), size: 20),
                       title: Text(tr('តុបតែងហាង & Bakong Payway', 'Decorate Store & Bakong')),
@@ -1044,10 +1219,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             final isAdmin = user?.isAdmin ?? false;
             final rawName = user?.name.trim() ?? '';
             final userName = rawName.isNotEmpty ? rawName : (isAdmin ? 'CHAN SOCHEAT' : 'អ្នកប្រើប្រាស់');
-            final rawHandle = user?.username.trim() ?? '';
-            final userHandle = rawHandle.isNotEmpty ? rawHandle : (isAdmin ? 'admin' : 'user');
-            final rawPhone = user?.phone.trim() ?? '';
-            final userPhone = rawPhone.isNotEmpty ? rawPhone : '';
             final userAvatar = (user?.avatar != null && user!.avatar.isNotEmpty)
                 ? user.avatar
                 : (isAdmin
@@ -1169,184 +1340,267 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
 
-                  // Avatar & User Details
+                  // Avatar & User Details (Facebook Profile Layout)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Transform.translate(
-                          offset: const Offset(0, -35),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                          offset: const Offset(0, -45),
+                          child: Column(
                             children: [
-                              // Avatar with border and 1-tap change camera badge
+                              // Mood Speech Bubble
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.cardBg,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: AppTheme.border, width: 0.8),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.08),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  'អារម្មណ៍បច្ចុប្បន្ន...',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.secondaryText,
+                                  ),
+                                ),
+                              ),
+
+                              // Circular Avatar with Camera Badge
                               GestureDetector(
                                 onTap: _pickAndUploadAvatar,
                                 child: Stack(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.all(3),
+                                      padding: const EdgeInsets.all(3.5),
                                       decoration: BoxDecoration(
                                         color: AppTheme.cardBg,
                                         shape: BoxShape.circle,
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black.withOpacity(0.2),
-                                            blurRadius: 8,
+                                            color: Colors.black.withOpacity(0.18),
+                                            blurRadius: 10,
                                           ),
                                         ],
                                       ),
                                       child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(35),
+                                        borderRadius: BorderRadius.circular(50),
                                         child: MediaImageView(
                                           url: userAvatar,
-                                          width: 70,
-                                          height: 70,
+                                          width: 96,
+                                          height: 96,
                                           fit: BoxFit.cover,
                                         ),
                                       ),
                                     ),
                                     Positioned(
-                                      bottom: 0,
-                                      right: 0,
+                                      bottom: 2,
+                                      right: 2,
                                       child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: const BoxDecoration(
-                                          color: Color(0xFF007AFF),
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: BoxDecoration(
+                                          color: isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB),
                                           shape: BoxShape.circle,
+                                          border: Border.all(color: AppTheme.cardBg, width: 1.5),
                                         ),
-                                        child: const Icon(CupertinoIcons.camera_fill, size: 12, color: CupertinoColors.white),
+                                        child: Icon(
+                                          CupertinoIcons.camera_fill,
+                                          size: 15,
+                                          color: isDark ? CupertinoColors.white : const Color(0xFF050505),
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              userName,
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.w800,
-                                                color: AppTheme.primaryText,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
+                            ],
+                          ),
+                        ),
+
+                        // Name & Verified Badge
+                        Transform.translate(
+                          offset: const Offset(0, -32),
+                          child: Column(
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    userName,
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppTheme.primaryText,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFF007AFF), size: 20),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                'អ្នកបង្កើតឌីជីថល (Digital Creator)',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.secondaryText,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                'អ្នកតាមដាន 627នាក់  •  កំពុងតាមដាន 244 នាក់',
+                                style: TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primaryText.withOpacity(0.85),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Contact Work: t.me/BongCheatz_IT',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF007AFF),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+
+                              // Mutual Friends Stack
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 58,
+                                    height: 24,
+                                    child: Stack(
+                                      children: [
+                                        Positioned(
+                                          left: 0,
+                                          child: Container(
+                                            width: 24,
+                                            height: 24,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: AppTheme.cardBg, width: 1.5),
+                                            ),
+                                            child: const ClipOval(
+                                              child: MediaImageView(url: '/uploads/media-1794317345030-536.jpg'),
                                             ),
                                           ),
-                                          if (user?.isVerified ?? false) ...[
-                                            const SizedBox(width: 5),
-                                            const Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFF007AFF), size: 18),
-                                          ],
-
-                                        ],
-                                      ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          userPhone.isNotEmpty ? '@$userHandle • $userPhone' : '@$userHandle',
-                                          style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
                                         ),
-                                        if ((user?.location ?? '').isNotEmpty) ...[
-                                          const SizedBox(height: 3),
-                                          Row(
-                                            children: [
-                                              const Icon(CupertinoIcons.location_solid, size: 12, color: Color(0xFF34C759)),
-                                              const SizedBox(width: 4),
-                                              Expanded(
-                                                child: Text(
-                                                  user!.location!,
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(fontSize: 11.5, color: Color(0xFF34C759), fontWeight: FontWeight.w600),
-                                                ),
-                                              ),
-                                            ],
+                                        Positioned(
+                                          left: 14,
+                                          child: Container(
+                                            width: 24,
+                                            height: 24,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: AppTheme.cardBg, width: 1.5),
+                                            ),
+                                            child: const ClipOval(
+                                              child: MediaImageView(url: '/uploads/media-1794329090435-680.jpg'),
+                                            ),
                                           ),
-                                        ],
+                                        ),
+                                        Positioned(
+                                          left: 28,
+                                          child: Container(
+                                            width: 24,
+                                            height: 24,
+                                            decoration: BoxDecoration(
+                                              shape: BoxShape.circle,
+                                              border: Border.all(color: AppTheme.cardBg, width: 1.5),
+                                            ),
+                                            child: const ClipOval(
+                                              child: MediaImageView(url: '/default_avatar.svg'),
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'មិត្តភក្តិមានរឿងដូចគ្នា',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.secondaryText,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+
+                              // Two Main Facebook Buttons: [📊 ផ្ទាំងគ្រប់គ្រង] & [+ បង្កើត]
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: CupertinoButton(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      color: const Color(0xFF007AFF),
+                                      borderRadius: BorderRadius.circular(12),
+                                      onPressed: _openCreatorDashboardSheet,
+                                      child: const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(CupertinoIcons.chart_bar_alt_fill, size: 16, color: CupertinoColors.white),
+                                          SizedBox(width: 6),
+                                          Text(
+                                            'ផ្ទាំងគ្រប់គ្រង',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: CupertinoColors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: CupertinoButton(
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      color: isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB),
+                                      borderRadius: BorderRadius.circular(12),
+                                      onPressed: _openCreateMenuSheet,
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            CupertinoIcons.plus,
+                                            size: 16,
+                                            color: isDark ? CupertinoColors.white : const Color(0xFF050505),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'បង្កើត',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? CupertinoColors.white : const Color(0xFF050505),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-
-                          if ((user?.bio ?? '').isNotEmpty) ...[
-                            Container(
-                              width: double.infinity,
-                              margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                              decoration: BoxDecoration(
-                                color: AppTheme.surfaceBg,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                user!.bio!,
-                                style: TextStyle(fontSize: 13, color: AppTheme.primaryText, height: 1.35),
-                              ),
-                            ),
-                          ],
-
-                        // Action Buttons: Edit Profile & VIP Upgrade
-                        Row(
-                          children: [
-                            Expanded(
-                              child: CupertinoButton(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                color: AppTheme.surfaceBg,
-                                borderRadius: BorderRadius.circular(12),
-                                onPressed: _openEditProfileSheet,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(CupertinoIcons.pencil, size: 16, color: Color(0xFF007AFF)),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      tr('កែសម្រួល', 'Edit Profile'),
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFF007AFF),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: CupertinoButton(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                color: const Color(0xFFFFB800).withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(12),
-                                onPressed: _openVipModal,
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(CupertinoIcons.rosette, size: 16, color: Color(0xFFFFB800)),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      user?.isVip ?? false
-                                          ? (user?.isUltra ?? false ? 'Ultra VIP' : 'Pro+ VIP')
-                                          : tr('ដំឡើង VIP', 'VIP Club'),
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFFFFB800),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
@@ -1354,26 +1608,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
 
-            // Liquid Glass Sliding Profile Segmented Control Tabs (Public Profile tabs only)
+            // Facebook Profile Segment Tabs: [ទាំងអស់] [Reels] [រូបថត] [ព្រឹត្តិការណ៍]
             LiquidGlassSegmentControl<int>(
               groupValue: _selectedTab,
               items: [
                 LiquidGlassSegmentItem(
                   value: 1,
-                  label: tr('ផុសរបស់ខ្ញុំ', 'Posts'),
+                  label: 'ទាំងអស់',
                   icon: CupertinoIcons.square_grid_2x2,
                 ),
                 LiquidGlassSegmentItem(
-                  value: 3,
-                  label: tr('វីដេអូ', 'Videos'),
-                  icon: CupertinoIcons.play_rectangle,
+                  value: 2,
+                  label: 'Reels',
+                  icon: CupertinoIcons.film,
                 ),
                 LiquidGlassSegmentItem(
-                  value: 2,
-                  label: tr('រក្សាទុក', 'Saved'),
-                  icon: CupertinoIcons.bookmark,
+                  value: 3,
+                  label: 'រូបថត',
+                  icon: CupertinoIcons.photo,
+                ),
+                LiquidGlassSegmentItem(
+                  value: 4,
+                  label: 'ព្រឹត្តិការណ៍',
+                  icon: CupertinoIcons.calendar,
                 ),
               ],
               onValueChanged: (val) {
@@ -1381,9 +1640,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _loadTabContent();
               },
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
 
-            // Tab 1: My Posts
+            // Quick Action Chips matching screenshot: [🔖 បានរក្សាទុក] [👍 បានចូលចិត្ត] [↗️ បានចែករំលែក] [👁️ ត្រូវការពិនិត្យមើល]
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  _buildQuickActionChip(CupertinoIcons.bookmark, 'បានរក្សាទុក', () {
+                    setState(() => _selectedTab = 5); // Saved tab
+                    _loadTabContent();
+                  }),
+                  const SizedBox(width: 8),
+                  _buildQuickActionChip(CupertinoIcons.hand_thumbsup, 'បានចូលចិត្ត', () {}),
+                  const SizedBox(width: 8),
+                  _buildQuickActionChip(CupertinoIcons.arrowshape_turn_up_right, 'បានចែករំលែក', () {}),
+                  const SizedBox(width: 8),
+                  _buildQuickActionChip(CupertinoIcons.eye, 'ត្រូវការពិនិត្យមើល', () {}),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Tab 1: All Posts
             if (_selectedTab == 1) ...[
               if (_isLoadingPosts)
                 const Center(
@@ -1426,8 +1706,121 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
             ],
 
-            // Tab 2: Saved Posts
+            // Tab 2: Reels (Matching c88e532b.jpg Clapperboard Empty State or Grid)
             if (_selectedTab == 2) ...[
+              if (_isLoadingPosts)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CupertinoActivityIndicator(radius: 14),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.border, width: 0.8),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Clapperboard Illustration
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF007AFF).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            CupertinoIcons.film_fill,
+                            size: 46,
+                            color: Color(0xFF007AFF),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'មិនទាន់មានរ៉េលទេ',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primaryText,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                        color: const Color(0xFF007AFF),
+                        borderRadius: BorderRadius.circular(12),
+                        onPressed: () {
+                          CreateReelSheet.show(context, onReelCreated: _loadTabContent);
+                        },
+                        child: const Text(
+                          'បង្កើតរ៉េល',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: CupertinoColors.white,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+
+            // Tab 3: Photos
+            if (_selectedTab == 3) ...[
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppTheme.border, width: 0.6),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(CupertinoIcons.photo, size: 40, color: CupertinoColors.systemGrey3),
+                    const SizedBox(height: 12),
+                    Text(
+                      'មិនទាន់មានរូបថតដែលបានបង្ហោះនៅឡើយទេ',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppTheme.secondaryText, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Tab 4: Events
+            if (_selectedTab == 4) ...[
+              Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: AppTheme.cardBg,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppTheme.border, width: 0.6),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(CupertinoIcons.calendar, size: 40, color: CupertinoColors.systemGrey3),
+                    const SizedBox(height: 12),
+                    Text(
+                      'មិនទាន់មានព្រឹត្តិការណ៍ដែលបានបង្កើតទេ',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppTheme.secondaryText, height: 1.4),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Tab 5: Saved Posts
+            if (_selectedTab == 5) ...[
               if (_isLoadingPosts)
                 const Center(
                   child: Padding(
@@ -1465,88 +1858,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onCommentTap: () => _openComments(post),
                     onPostDeleted: _loadTabContent,
                     onPostUpdated: _loadTabContent,
-                  ),
-                ),
-            ],
-
-            // Tab 3: Videos & Streams
-            if (_selectedTab == 3) ...[
-              if (_isLoadingStreams)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(40),
-                    child: CupertinoActivityIndicator(radius: 14),
-                  ),
-                )
-              else if (_userStreams.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBg,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AppTheme.border, width: 0.6),
-                  ),
-                  child: Column(
-                    children: [
-                      const Icon(CupertinoIcons.play_rectangle, size: 40, color: CupertinoColors.systemGrey3),
-                      const SizedBox(height: 12),
-                      Text(
-                        tr(
-                          'មិនទាន់មានវីដេអូ ឬការផ្សាយផ្ទាល់នៅឡើយទេ\nបង្ហោះវីដេអូរបស់អ្នកឥឡូវនេះ!',
-                          'No videos or streams published yet.\nUpload your video now!',
-                        ),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: AppTheme.secondaryText, height: 1.4),
-                      ),
-                    ],
-                  ),
-                )
-              else
-                ..._userStreams.map(
-                  (stream) => Container(
-                    margin: const EdgeInsets.only(bottom: 14),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.cardBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.border, width: 0.8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                MediaImageView(url: stream.thumbnailUrl ?? stream.videoUrl, fit: BoxFit.cover),
-                                Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: const BoxDecoration(color: Color(0x99000000), shape: BoxShape.circle),
-                                  child: const Icon(CupertinoIcons.play_fill, color: CupertinoColors.white, size: 22),
-                                ),
-                                Positioned(
-                                  bottom: 8,
-                                  right: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: const Color(0xCC000000), borderRadius: BorderRadius.circular(4)),
-                                    child: Text(stream.duration, style: const TextStyle(color: CupertinoColors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(stream.title, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: AppTheme.primaryText)),
-                        const SizedBox(height: 4),
-                        Text('• ${stream.viewsCount} views  • ${stream.likesCount} likes', style: TextStyle(fontSize: 11, color: AppTheme.secondaryText)),
-                      ],
-                    ),
                   ),
                 ),
             ],
