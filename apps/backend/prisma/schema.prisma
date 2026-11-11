@@ -1,0 +1,726 @@
+// Prisma Schema for Spaces Platform
+// Compatible with PostgreSQL 14+
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ----------------------------------------------------
+// ENUMS
+// ----------------------------------------------------
+
+enum UserRole {
+  SUPERADMIN
+  USER
+}
+
+enum SpaceMode {
+  FAMILY
+  TEAM
+  PUBLIC
+}
+
+enum SpaceMemberRole {
+  OWNER
+  ADMIN
+  MODERATOR
+  MEMBER
+  GUEST
+  CHILD
+}
+
+enum PostAudience {
+  PUBLIC
+  SPACE_ONLY
+  CIRCLE_ONLY
+  ONLY_ME
+}
+
+enum ExpirationType {
+  NEVER
+  HOURS_24
+  DAYS_7
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+}
+
+enum ReactionType {
+  LIKE
+  LOVE
+  CELEBRATE
+  LAUGH
+  SAD
+}
+
+enum FollowStatus {
+  PENDING
+  ACCEPTED
+}
+
+enum ChannelType {
+  TEXT
+  ANNOUNCEMENT
+  VOICE_ROOM
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ListType {
+  GROCERY
+  PACKING
+  TODO
+  GENERAL
+}
+
+enum ReportTargetType {
+  POST
+  COMMENT
+  USER
+  SPACE
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWED
+  RESOLVED
+  DISMISSED
+}
+
+enum ExportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum NotificationType {
+  POST_LIKE
+  POST_COMMENT
+  COMMENT_REPLY
+  USER_FOLLOW
+  SPACE_INVITE
+  TIME_CAPSULE_UNLOCKED
+  TASK_ASSIGNED
+  CALENDAR_REMINDER
+  CHILD_POST_APPROVAL_REQUEST
+  SYSTEM_ANNOUNCEMENT
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+// ----------------------------------------------------
+// USERS & AUTHENTICATION
+// ----------------------------------------------------
+
+model User {
+  id               String       @id @default(uuid())
+  email            String?      @unique
+  phone            String?      @unique
+  username         String       @unique
+  passwordHash     String
+  displayName      String
+  bio              String?      @db.VarChar(500)
+  avatarUrl        String?
+  bannerUrl        String?
+  language         String       @default("km") // "km" or "en"
+  role             UserRole     @default(USER)
+
+  // Child-safe protections for Family mode
+  isChild          Boolean      @default(false)
+  parentId         String?
+  parent           User?        @relation("ParentChildren", fields: [parentId], references: [id], onDelete: SetNull)
+  children         User[]       @relation("ParentChildren")
+
+  // Privacy & UI preference settings
+  hideMetrics      Boolean      @default(false) // Hide like/view counts
+  focusModeEnabled Boolean      @default(false) // Daily digest mode instead of infinite scroll
+  digestTime       String       @default("19:00") // Time of day for daily digest in HH:mm
+  quietHoursStart  String?      // e.g. "22:00"
+  quietHoursEnd    String?      // e.g. "07:00"
+  isPrivateProfile Boolean      @default(false)
+  isVerified       Boolean      @default(false)
+  isActive         Boolean      @default(true)
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  deletedAt        DateTime?    // Soft delete support
+
+  // Relations
+  refreshTokens    RefreshToken[]
+  devices          UserDevice[]
+  spacesCreated    Space[]            @relation("SpaceCreator")
+  spaceMemberships SpaceMember[]
+  circles          Circle[]           @relation("UserCircles")
+  circleMemberships CircleMember[]
+  posts            Post[]
+  reactions        PostReaction[]
+  comments         Comment[]
+  commentReactions CommentReaction[]
+  following        Follow[]           @relation("FollowerRelation")
+  followers        Follow[]           @relation("FollowingRelation")
+  sentMessages     Message[]          @relation("MessageSender")
+  notifications    Notification[]     @relation("NotificationRecipient")
+  actionsTriggered Notification[]     @relation("NotificationActor")
+  calendarEvents   CalendarEvent[]    @relation("CalendarEventCreator")
+  assignedTasks    Task[]             @relation("TaskAssignee")
+  createdTasks     Task[]             @relation("TaskCreator")
+  createdLists     SharedList[]       @relation("ListCreator")
+  completedListItems ListItem[]       @relation("ListItemCompleter")
+  albums           Album[]            @relation("AlbumCreator")
+  reportsFiled     Report[]           @relation("ReportFiler")
+  reportsAgainst   Report[]           @relation("ReportTargetUser")
+  blockedUsers     UserBlock[]        @relation("BlockerRelation")
+  blockedBy        UserBlock[]        @relation("BlockedRelation")
+  mutedUsers       UserMute[]         @relation("MuterRelation")
+  mutedBy          UserMute[]         @relation("MutedRelation")
+  dataExports      DataExport[]
+
+  @@index([username])
+  @@index([email])
+  @@index([phone])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ipAddress String?
+  isRevoked Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model UserDevice {
+  id           String         @id @default(uuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fcmToken     String         @unique
+  platform     DevicePlatform
+  deviceModel  String?
+  osVersion    String?
+  lastActiveAt DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------
+// AUDIENCE CIRCLES (Custom per-post groups)
+// ----------------------------------------------------
+
+model Circle {
+  id          String         @id @default(uuid())
+  ownerId     String
+  owner       User           @relation("UserCircles", fields: [ownerId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  colorHex    String?        @default("#34C759")
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  members     CircleMember[]
+  posts       PostCircle[]
+
+  @@index([ownerId])
+}
+
+model CircleMember {
+  id        String   @id @default(uuid())
+  circleId  String
+  circle    Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([circleId, userId])
+  @@index([userId])
+}
+
+// ----------------------------------------------------
+// SPACES & WORKSPACES
+// ----------------------------------------------------
+
+model Space {
+  id          String      @id @default(uuid())
+  slug        String      @unique
+  name        String
+  description String?     @db.VarChar(1000)
+  iconUrl     String?
+  bannerUrl   String?
+  mode        SpaceMode   @default(PUBLIC)
+  isPrivate   Boolean     @default(false)
+  createdById String
+  createdBy   User        @relation("SpaceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  members     SpaceMember[]
+  invites     SpaceInvite[]
+  channels    Channel[]
+  posts       Post[]
+  events      CalendarEvent[]
+  tasks       Task[]
+  lists       SharedList[]
+  albums      Album[]
+  reports     Report[]
+
+  @@index([slug])
+  @@index([mode])
+}
+
+model SpaceMember {
+  id        String          @id @default(uuid())
+  spaceId   String
+  space     Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      SpaceMemberRole @default(MEMBER)
+  joinedAt  DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([spaceId, userId])
+  @@index([userId])
+  @@index([spaceId, role])
+}
+
+model SpaceInvite {
+  id        String          @id @default(uuid())
+  spaceId   String
+  space     Space           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  code      String          @unique
+  role      SpaceMemberRole @default(MEMBER)
+  maxUses   Int?
+  usedCount Int             @default(0)
+  expiresAt DateTime?
+  createdAt DateTime        @default(now())
+
+  @@index([code])
+}
+
+model Channel {
+  id          String      @id @default(uuid())
+  spaceId     String
+  space       Space       @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  name        String
+  topic       String?
+  type        ChannelType @default(TEXT)
+  isPrivate   Boolean     @default(false)
+  position    Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  messages    Message[]
+
+  @@index([spaceId])
+}
+
+// ----------------------------------------------------
+// POSTS, MEDIA, REACTIONS & COMMENTS
+// ----------------------------------------------------
+
+model Post {
+  id               String         @id @default(uuid())
+  authorId         String
+  author           User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  spaceId          String?
+  space            Space?         @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+
+  content          String         @db.Text
+  audience         PostAudience   @default(PUBLIC)
+
+  // Expiring Post Support
+  expirationType   ExpirationType @default(NEVER)
+  expiresAt        DateTime?
+
+  // Time Capsule Support
+  isTimeCapsule    Boolean        @default(false)
+  unlockAt         DateTime?
+  isUnlocked       Boolean        @default(true)
+
+  // Child safety approval
+  isChildSubmitted Boolean        @default(false)
+  isApproved       Boolean        @default(true)
+
+  // Post properties
+  isPinned         Boolean        @default(false)
+  isArchived       Boolean        @default(false)
+  isDeleted        Boolean        @default(false)
+  deletedAt        DateTime?
+
+  // Cached counters for high-speed feeds
+  likeCount        Int            @default(0)
+  commentCount     Int            @default(0)
+
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  // Relations
+  media            PostMedia[]
+  reactions        PostReaction[]
+  comments         Comment[]
+  targetCircles    PostCircle[]
+  reports          Report[]
+
+  @@index([authorId])
+  @@index([spaceId])
+  @@index([createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@index([unlockAt])
+}
+
+model PostCircle {
+  id       String @id @default(uuid())
+  postId   String
+  post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  circleId String
+  circle   Circle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, circleId])
+}
+
+model PostMedia {
+  id              String    @id @default(uuid())
+  postId          String
+  post            Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type            MediaType
+  storageKey      String    // S3 object key
+  url             String    // CDN/Public URL
+  thumbnailUrl    String?   // Generated thumbnail
+  blurHash        String?   // Progressive blurred image placeholder
+  width           Int?
+  height          Int?
+  durationSeconds Float?
+  sizeBytes       Int
+  mimeType        String
+  createdAt       DateTime  @default(now())
+
+  @@index([postId])
+}
+
+model PostReaction {
+  id        String       @id @default(uuid())
+  postId    String
+  post      Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      ReactionType @default(LIKE)
+  createdAt DateTime     @default(now())
+
+  @@unique([postId, userId])
+  @@index([userId])
+}
+
+model Comment {
+  id              String            @id @default(uuid())
+  postId          String
+  post            Post              @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId        String
+  author          User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentId        String?
+  parent          Comment?          @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies         Comment[]         @relation("CommentReplies")
+
+  content         String            @db.VarChar(2000)
+  isDeleted       Boolean           @default(false)
+  likeCount       Int               @default(0)
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  reactions       CommentReaction[]
+  reports         Report[]
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model CommentReaction {
+  id        String       @id @default(uuid())
+  commentId String
+  comment   Comment      @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      ReactionType @default(LIKE)
+  createdAt DateTime     @default(now())
+
+  @@unique([commentId, userId])
+  @@index([userId])
+}
+
+// ----------------------------------------------------
+// SOCIAL GRAPH (Follows)
+// ----------------------------------------------------
+
+model Follow {
+  id          String       @id @default(uuid())
+  followerId  String
+  follower    User         @relation("FollowerRelation", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User         @relation("FollowingRelation", fields: [followingId], references: [id], onDelete: Cascade)
+  status      FollowStatus @default(ACCEPTED)
+  createdAt   DateTime     @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+// ----------------------------------------------------
+// CHAT & MESSAGING (Realtime)
+// ----------------------------------------------------
+
+model Message {
+  id        String        @id @default(uuid())
+  channelId String
+  channel   Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User          @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  content   String?       @db.Text
+  isDeleted Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  media     MessageMedia?
+
+  @@index([channelId, createdAt(sort: Desc)])
+  @@index([senderId])
+}
+
+model MessageMedia {
+  id           String    @id @default(uuid())
+  messageId    String    @unique
+  message      Message   @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  type         MediaType
+  storageKey   String
+  url          String
+  thumbnailUrl String?
+  mimeType     String
+  sizeBytes    Int
+  createdAt    DateTime  @default(now())
+}
+
+// ----------------------------------------------------
+// PRODUCTIVITY & COLLABORATION (Family & Team Modes)
+// ----------------------------------------------------
+
+model CalendarEvent {
+  id          String   @id @default(uuid())
+  spaceId     String
+  space       Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  creatorId   String
+  creator     User     @relation("CalendarEventCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  startTime   DateTime
+  endTime     DateTime
+  isAllDay    Boolean  @default(false)
+  location    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([spaceId, startTime])
+}
+
+model Task {
+  id          String       @id @default(uuid())
+  spaceId     String
+  space       Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  creatorId   String
+  creator     User         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  assigneeId  String?
+  assignee    User?        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  title       String
+  description String?
+  dueDate     DateTime?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([spaceId, status])
+  @@index([assigneeId])
+}
+
+model SharedList {
+  id        String     @id @default(uuid())
+  spaceId   String
+  space     Space      @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  creatorId String
+  creator   User       @relation("ListCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  title     String
+  type      ListType   @default(GENERAL)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  items     ListItem[]
+
+  @@index([spaceId])
+}
+
+model ListItem {
+  id            String      @id @default(uuid())
+  listId        String
+  list          SharedList  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  title         String
+  isCompleted   Boolean     @default(false)
+  completedById String?
+  completedBy   User?       @relation("ListItemCompleter", fields: [completedById], references: [id], onDelete: SetNull)
+  completedAt   DateTime?
+  position      Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([listId])
+}
+
+model Album {
+  id          String       @id @default(uuid())
+  spaceId     String
+  space       Space        @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  createdById String
+  createdBy   User         @relation("AlbumCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  media       AlbumMedia[]
+
+  @@index([spaceId])
+}
+
+model AlbumMedia {
+  id           String    @id @default(uuid())
+  albumId      String
+  album        Album     @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  storageKey   String
+  url          String
+  thumbnailUrl String?
+  caption      String?
+  sizeBytes    Int
+  createdAt    DateTime  @default(now())
+
+  @@index([albumId])
+}
+
+// ----------------------------------------------------
+// NOTIFICATIONS
+// ----------------------------------------------------
+
+model Notification {
+  id          String           @id @default(uuid())
+  recipientId String
+  recipient   User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  type        NotificationType
+  title       String
+  body        String
+  payloadJson Json?
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([recipientId, isRead, createdAt(sort: Desc)])
+}
+
+// ----------------------------------------------------
+// MODERATION, PRIVACY & DATA EXPORT
+// ----------------------------------------------------
+
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blocker   User     @relation("BlockerRelation", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedId String
+  blocked   User     @relation("BlockedRelation", fields: [blockedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+}
+
+model UserMute {
+  id        String   @id @default(uuid())
+  muterId   String
+  muter     User     @relation("MuterRelation", fields: [muterId], references: [id], onDelete: Cascade)
+  mutedId   String
+  muted     User     @relation("MutedRelation", fields: [mutedId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([muterId, mutedId])
+  @@index([muterId])
+}
+
+model Report {
+  id           String           @id @default(uuid())
+  reporterId   String
+  reporter     User             @relation("ReportFiler", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType   ReportTargetType
+  postId       String?
+  post         Post?            @relation(fields: [postId], references: [id], onDelete: SetNull)
+  commentId    String?
+  comment      Comment?         @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  userId       String?
+  targetUser   User?            @relation("ReportTargetUser", fields: [userId], references: [id], onDelete: SetNull)
+  spaceId      String?
+  space        Space?           @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+
+  reason       String           @db.VarChar(500)
+  status       ReportStatus     @default(PENDING)
+  actionNote   String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([status])
+  @@index([reporterId])
+}
+
+model DataExport {
+  id          String       @id @default(uuid())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      ExportStatus @default(PENDING)
+  downloadUrl String?
+  expiresAt   DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+}
+
