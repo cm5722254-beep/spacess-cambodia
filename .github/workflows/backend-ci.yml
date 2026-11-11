@@ -1,0 +1,70 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'apps/backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'apps/backend/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: spaces_test
+          POSTGRES_PASSWORD: spaces_test_pass
+          POSTGRES_DB: spaces_test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run prisma:generate --workspace=spaces-backend
+        env:
+          DATABASE_URL: "postgresql://spaces_test:spaces_test_pass@localhost:5432/spaces_test_db?schema=public"
+
+      - name: Run Backend Build
+        run: npm run build:backend
+
+      - name: Run Backend Tests
+        run: npm run test:backend
+        env:
+          DATABASE_URL: "postgresql://spaces_test:spaces_test_pass@localhost:5432/spaces_test_db?schema=public"
+          REDIS_HOST: "localhost"
+          REDIS_PORT: 6379
+
