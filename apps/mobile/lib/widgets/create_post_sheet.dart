@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors, LinearProgressIndicator, AlwaysStoppedAnimation;
 import '../models/post_model.dart';
+import '../screens/stream_watch_screen.dart';
 import '../services/api_service.dart';
 import '../services/theme_service.dart';
 import '../utils/media_picker_helper.dart';
@@ -111,13 +112,14 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
     super.dispose();
   }
 
-  void _pickFromDevice() async {
+  void _pickFromDevice({bool captureCamera = false, String accept = 'image/*,video/*'}) async {
     setState(() {
       isImporting = true;
       _uploadProgress = 0.05;
     });
     final media = await MediaPickerHelper.pickAndUploadMedia(
-      accept: 'image/*,video/*',
+      accept: accept,
+      captureCamera: captureCamera,
       onProgress: (p) {
         if (mounted) setState(() => _uploadProgress = p);
       },
@@ -281,6 +283,12 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
     if (mounted) setState(() => _uploadProgress = 1.0);
 
     if (newPost != null && mounted) {
+      if (_shareToStory && finalMedia != null && finalMedia.isNotEmpty) {
+        await ApiService().createStory(
+          imageUrl: finalMedia,
+          caption: text.isNotEmpty ? text : null,
+        );
+      }
       await Future.delayed(const Duration(milliseconds: 250));
       if (!mounted) return;
       widget.onPostCreated(newPost);
@@ -309,7 +317,7 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.brightnessOf(context) == Brightness.dark;
     final currentUser = ApiService().currentUser;
-    final userName = currentUser?.name ?? 'Vin Chan Socheat';
+    final userName = currentUser?.name ?? 'អ្នកប្រើប្រាស់';
     final userAvatar = currentUser?.avatar ?? '/default_avatar.svg';
 
     final activeTheme = postBackgroundThemes.firstWhere(
@@ -645,32 +653,28 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
                   _buildBottomCard(
                     icon: CupertinoIcons.photo_on_rectangle,
                     label: isImporting ? 'កំពុងផ្ទុក...' : 'វិចិត្រសាល',
-                    onTap: _pickFromDevice,
+                    onTap: () => _pickFromDevice(),
                   ),
                   const SizedBox(width: 10),
                   _buildBottomCard(
                     icon: CupertinoIcons.camera_fill,
                     label: 'កាមេរ៉ា',
-                    onTap: _pickFromDevice,
+                    onTap: () => _pickFromDevice(captureCamera: true),
                   ),
                   const SizedBox(width: 10),
                   _buildBottomCard(
                     icon: CupertinoIcons.play_rectangle,
                     label: 'GIF',
-                    onTap: () {
-                      setState(() {
-                        _contentController.text = '${_contentController.text} [GIF: Trending Cambodia]'.trim();
-                      });
-                    },
+                    onTap: () => _pickFromDevice(accept: 'image/gif'),
                   ),
                   const SizedBox(width: 10),
                   _buildBottomCard(
                     icon: CupertinoIcons.videocam_fill,
                     label: 'ការផ្សាយបន្តផ្ទាល់',
                     onTap: () {
-                      setState(() {
-                        _contentController.text = '${_contentController.text} 🔴 កំពុងផ្សាយផ្ទាល់លើ Spaces!'.trim();
-                      });
+                      final nav = Navigator.of(context);
+                      nav.pop();
+                      nav.push(CupertinoPageRoute(builder: (_) => const StreamWatchScreen()));
                     },
                   ),
                   const SizedBox(width: 10),

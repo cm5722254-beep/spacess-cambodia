@@ -404,6 +404,9 @@ export class FeedService {
     content?: string;
     audioTitle?: string;
     location?: string;
+    spaceId?: string;
+    tags?: string[];
+    isBoosted?: boolean;
     isAiGenerated?: boolean;
     shareToStory?: boolean;
   }) {
@@ -416,11 +419,13 @@ export class FeedService {
     const reel = this.db.createPost({
       authorId,
       content,
-      spaceId: 'public',
+      spaceId: dto.spaceId && dto.spaceId.trim().length > 0 ? dto.spaceId.trim() : 'public',
       circleName: 'Reels',
       city,
       videoUrl: dto.videoUrl,
       mediaType: 'video',
+      tags: Array.isArray(dto.tags) ? dto.tags : undefined,
+      isBoosted: dto.isBoosted === true,
       isReel: true,
       reelAudioTitle: dto.audioTitle || 'Original Audio',
     });

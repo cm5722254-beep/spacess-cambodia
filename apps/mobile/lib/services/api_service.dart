@@ -1115,6 +1115,23 @@ class ApiService {
     return null;
   }
 
+  Future<Map<String, dynamic>> fetchUserOrders() async {
+    try {
+      final user = currentUser;
+      if (user == null) return {'purchases': [], 'sales': []};
+      final response = await _dio.get('/marketplace/orders/user/${user.id}');
+      if (response.statusCode == 200) {
+        final raw = response.data['data'] ?? response.data;
+        if (raw is Map) {
+          return Map<String, dynamic>.from(raw);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching user orders: $e');
+    }
+    return {'purchases': [], 'sales': []};
+  }
+
   // --- PASSWORD & PRIVACY ---
   Future<bool> changePassword(String oldPassword, String newPassword) async {
     try {
@@ -1367,6 +1384,9 @@ class ApiService {
     String? content,
     String? audioTitle,
     String? location,
+    String? spaceId,
+    List<String>? tags,
+    bool isBoosted = false,
     bool isAiGenerated = false,
     bool shareToStory = false,
   }) async {
@@ -1380,6 +1400,9 @@ class ApiService {
           'content': content ?? '',
           'audioTitle': audioTitle ?? 'Original Audio - Spaces Cambodia',
           'location': location,
+          if (spaceId != null && spaceId.isNotEmpty) 'spaceId': spaceId,
+          if (tags != null && tags.isNotEmpty) 'tags': tags,
+          'isBoosted': isBoosted,
           'isAiGenerated': isAiGenerated,
           'shareToStory': shareToStory,
         },

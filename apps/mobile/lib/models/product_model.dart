@@ -51,8 +51,7 @@ class ProductModel {
       priceKhr: (json['priceKhr'] is num) ? (json['priceKhr'] as num).toInt() : 0,
       category: json['category']?.toString() ?? 'Electronics',
       condition: json['condition']?.toString() ?? 'ថ្មី',
-      imageUrl: json['imageUrl']?.toString() ??
-          'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80',
+      imageUrl: json['imageUrl']?.toString() ?? '',
       location: json['location']?.toString() ?? 'ភ្នំពេញ (Phnom Penh)',
       description: json['description']?.toString() ?? '',
       sellerId: json['sellerId']?.toString() ?? '',

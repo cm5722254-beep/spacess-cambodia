@@ -37,8 +37,8 @@ class Author {
       role: json['role'] ?? '',
       location: json['location'] ?? 'Phnom Penh, Cambodia',
       bio: json['bio'] ?? '',
-      followerCount: json['followerCount'] ?? 100,
-      followingCount: json['followingCount'] ?? 50,
+      followerCount: json['followerCount'] ?? 0,
+      followingCount: json['followingCount'] ?? 0,
       isFollowing: json['isFollowing'] ?? false,
     );
   }

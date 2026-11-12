@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors;
+import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../utils/media_picker_helper.dart';
 import 'web_video_player.dart';
@@ -28,9 +29,12 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
   String _audioTitle = 'Original Audio - Spaces Cambodia';
   bool _aiLabelEnabled = false;
   String? _selectedLocation;
+  String? _selectedSpaceId;
   String? _selectedGroup;
   String? _partnerLink;
   String? _selectedPlaylist;
+  String? _abVariantCaption;
+  bool _monetizeTips = false;
   final List<String> _taggedPeople = [];
   bool _shareToStory = true;
   bool _boostReel = false;
@@ -44,51 +48,30 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
   String? _textOverlay;
   String? _stickerOverlay;
 
-  // Preset sample videos for instant Reel creation
-  final List<Map<String, String>> _sampleGalleryClips = [
-    {
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-      'duration': '00:15',
-      'title': 'Cambodia Horizon',
-      'thumb': 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=500&q=80',
-    },
-    {
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
-      'duration': '00:16',
-      'title': 'Sunset at Siem Reap',
-      'thumb': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80',
-    },
-    {
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4',
-      'duration': '01:05',
-      'title': 'Phnom Penh City Night',
-      'thumb': 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500&q=80',
-    },
-    {
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyBlazes.mp4',
-      'duration': '02:00',
-      'title': 'Bokor Mountain Trip',
-      'thumb': 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=500&q=80',
-    },
-    {
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerMeltdowns.mp4',
-      'duration': '02:00',
-      'title': 'Koh Rong Beach Vibes',
-      'thumb': 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=500&q=80',
-    },
-    {
-      'url': 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
-      'duration': '02:00',
-      'title': 'Cambodian Food Journey',
-      'thumb': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&q=80',
-    },
-  ];
+  // Real user-uploaded video posts (ZERO demo or stock clips!)
+  List<PostModel> _userPreviousVideos = [];
+  bool _isLoadingClips = false;
 
   @override
   void initState() {
     super.initState();
+    _loadMyPreviousVideos();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pickVideoFromDevice();
+    });
+  }
+
+  Future<void> _loadMyPreviousVideos() async {
+    final userId = ApiService().currentUser?.id;
+    if (userId == null) return;
+    setState(() => _isLoadingClips = true);
+    final posts = await ApiService().fetchFeed(authorId: userId);
+    if (!mounted) return;
+    setState(() {
+      _userPreviousVideos = posts
+          .where((p) => p.isReel || (p.videoUrl != null && p.videoUrl!.isNotEmpty))
+          .toList();
+      _isLoadingClips = false;
     });
   }
 
@@ -139,14 +122,34 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
     });
 
     try {
-      await Future.delayed(const Duration(milliseconds: 300));
+      String finalCaption = _captionCtrl.text.trim();
+      if (_textOverlay != null && _textOverlay!.isNotEmpty && !finalCaption.contains(_textOverlay!)) {
+        finalCaption = '$finalCaption\n[${_textOverlay!}]'.trim();
+      }
+      if (_partnerLink != null && _partnerLink!.isNotEmpty) {
+        finalCaption = '$finalCaption\n🛍️ $_partnerLink'.trim();
+      }
+      if (_abVariantCaption != null && _abVariantCaption!.isNotEmpty) {
+        finalCaption = '$finalCaption\n($_abVariantCaption)'.trim();
+      }
+
+      final allTags = <String>[
+        ..._taggedPeople,
+        if (_selectedPlaylist != null && _selectedPlaylist!.isNotEmpty) _selectedPlaylist!,
+        if (_activeFilter != 'normal') 'Filter:$_activeFilter',
+        if (_monetizeTips) 'BakongTips',
+      ];
+
       if (mounted) setState(() => _uploadProgress = 0.65);
 
       await ApiService().createReel(
         videoUrl: _selectedVideoUrl!,
-        content: _captionCtrl.text.trim(),
+        content: finalCaption,
         audioTitle: _audioTitle,
         location: _selectedLocation,
+        spaceId: _selectedSpaceId,
+        tags: allTags.isEmpty ? null : allTags,
+        isBoosted: _boostReel,
         isAiGenerated: _aiLabelEnabled,
         shareToStory: _shareToStory,
       );
@@ -414,8 +417,8 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
               ),
               CupertinoButton(
                 padding: EdgeInsets.zero,
+                onPressed: _showReelPreferencesSheet,
                 child: const Icon(CupertinoIcons.gear, color: CupertinoColors.white, size: 24),
-                onPressed: () {},
               ),
             ],
           ),
@@ -430,8 +433,12 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
               _buildTopRoundAction(CupertinoIcons.camera_fill, 'ថតកាមេរ៉ា', () => _pickVideoFromDevice(captureCamera: true)),
               _buildTopRoundAction(CupertinoIcons.photo_on_rectangle, 'វិចិត្រសាល', () => _pickVideoFromDevice(captureCamera: false)),
               _buildTopRoundAction(CupertinoIcons.music_note, 'តន្ត្រី', _showAudioPicker),
-              _buildTopRoundAction(CupertinoIcons.square_stack_3d_up_fill, 'គំរូ', () {}),
-              _buildTopRoundAction(CupertinoIcons.sparkles, 'AI Label', () => setState(() => _aiLabelEnabled = !_aiLabelEnabled)),
+              _buildTopRoundAction(CupertinoIcons.sparkles, 'បែបផែន', _showFilterPicker),
+              _buildTopRoundAction(
+                CupertinoIcons.tag_fill,
+                _aiLabelEnabled ? 'AI: បើក' : 'AI Label',
+                () => setState(() => _aiLabelEnabled = !_aiLabelEnabled),
+              ),
             ],
           ),
         ),
@@ -439,88 +446,120 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
         const SizedBox(height: 8),
         Container(height: 0.5, color: const Color(0xFF2C2C2E)),
 
-        // Subheader: វិចិត្រសាល ∨ | [🖼️] ជ្រើសរើសច្រើន
+        // Subheader: វីដេអូរបស់អ្នក | [+ រើសពីទូរស័ព្ទ]
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: const [
-                  Text(
-                    'វិចិត្រសាល',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(CupertinoIcons.chevron_down, color: CupertinoColors.white, size: 14),
-                ],
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2C2C2E),
-                  borderRadius: BorderRadius.circular(16),
+              Text(
+                _userPreviousVideos.isEmpty ? 'ថត ឬជ្រើសរើសវីដេអូពិត' : 'វីដេអូរបស់អ្នក (${_userPreviousVideos.length})',
+                style: const TextStyle(
+                  color: CupertinoColors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                 ),
-                child: Row(
-                  children: const [
-                    Icon(CupertinoIcons.square_on_square, color: CupertinoColors.white, size: 14),
-                    SizedBox(width: 6),
-                    Text(
-                      'ជ្រើសរើសច្រើន',
-                      style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  ],
+              ),
+              GestureDetector(
+                onTap: () => _pickVideoFromDevice(captureCamera: false),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF007AFF),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(CupertinoIcons.folder_open, color: CupertinoColors.white, size: 14),
+                      SizedBox(width: 6),
+                      Text(
+                        'រើសពីទូរស័ព្ទ',
+                        style: TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
 
-        // Device Gallery Trigger & Sample Clips Grid
+        // Real Device Camera, Phone Gallery Picker & User's Real Previous Videos
         Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(4),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 3,
-              mainAxisSpacing: 3,
-              childAspectRatio: 0.68,
-            ),
-            itemCount: _sampleGalleryClips.length + 1,
-            itemBuilder: (ctx, idx) {
-              // First slot: Open Camera (ថតកាមេរ៉ា)
-              if (idx == 0) {
-                return GestureDetector(
-                  onTap: () => _pickVideoFromDevice(captureCamera: true),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1C1C1E),
-                      border: Border.all(color: const Color(0xFF3A3B3C)),
-                    ),
-                    child: Center(
-                      child: _isUploading
-                          ? Column(
+          child: _isLoadingClips
+              ? const Center(child: CupertinoActivityIndicator(color: CupertinoColors.white, radius: 14))
+              : GridView.builder(
+                  padding: const EdgeInsets.all(6),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 4,
+                    mainAxisSpacing: 4,
+                    childAspectRatio: 0.68,
+                  ),
+                  itemCount: _userPreviousVideos.length + 2,
+                  itemBuilder: (ctx, idx) {
+                    // Slot 0: Open Camera
+                    if (idx == 0) {
+                      return GestureDetector(
+                        onTap: () => _pickVideoFromDevice(captureCamera: true),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1C1C1E),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF3A3B3C)),
+                          ),
+                          child: Center(
+                            child: _isUploading
+                                ? Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 14),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'កំពុងផ្ទុក ${(_uploadProgress * 100).toInt()}%...',
+                                        style: const TextStyle(color: CupertinoColors.white, fontSize: 11),
+                                      ),
+                                    ],
+                                  )
+                                : const Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(CupertinoIcons.camera_fill, color: Color(0xFF007AFF), size: 34),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'ថតកាមេរ៉ា\n(Camera)',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: CupertinoColors.white,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    // Slot 1: Open Phone Gallery
+                    if (idx == 1) {
+                      return GestureDetector(
+                        onTap: () => _pickVideoFromDevice(captureCamera: false),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF122338),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: const Color(0xFF007AFF).withOpacity(0.6)),
+                          ),
+                          child: const Center(
+                            child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 14),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'កំពុងផ្ទុក ${(_uploadProgress * 100).toInt()}%...',
-                                  style: const TextStyle(color: CupertinoColors.white, fontSize: 11),
-                                ),
-                              ],
-                            )
-                          : Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(CupertinoIcons.camera_fill, color: Color(0xFF007AFF), size: 36),
+                                Icon(CupertinoIcons.photo_on_rectangle, color: Color(0xFF34C759), size: 34),
                                 SizedBox(height: 8),
                                 Text(
-                                  'ថតកាមេរ៉ា\n(Camera)',
+                                  'ជ្រើសរើសវីដេអូ\nពីទូរស័ព្ទ',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: CupertinoColors.white,
@@ -530,47 +569,53 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
                                 ),
                               ],
                             ),
-                    ),
-                  ),
-                );
-              }
-
-              final clip = _sampleGalleryClips[idx - 1];
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedVideoUrl = clip['url'];
-                    _step = 1; // Go to Step 2 Edit
-                  });
-                },
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.network(
-                      clip['thumb']!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(color: const Color(0xFF2C2C2E)),
-                    ),
-                    Positioned(
-                      bottom: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(4),
+                          ),
                         ),
-                        child: Text(
-                          clip['duration']!,
-                          style: const TextStyle(color: CupertinoColors.white, fontSize: 11, fontWeight: FontWeight.w700),
+                      );
+                    }
+
+                    final realPost = _userPreviousVideos[idx - 2];
+                    final clipUrl = realPost.videoUrl ?? realPost.imageUrl ?? '';
+                    return GestureDetector(
+                      onTap: () {
+                        if (clipUrl.isEmpty) return;
+                        setState(() {
+                          _selectedVideoUrl = clipUrl;
+                          _step = 1; // Go to Step 2 Edit
+                        });
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Container(
+                              color: const Color(0xFF1C1C1E),
+                              child: const Center(
+                                child: Icon(CupertinoIcons.play_circle_fill, color: CupertinoColors.white, size: 36),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                color: Colors.black.withOpacity(0.65),
+                                child: Text(
+                                  realPost.content.isNotEmpty ? realPost.content : 'Reel របស់អ្នក',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: CupertinoColors.white, fontSize: 10.5, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
       ],
     );
@@ -698,8 +743,8 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
 
               CupertinoButton(
                 padding: EdgeInsets.zero,
+                onPressed: _showEditMoreSheet,
                 child: const Icon(CupertinoIcons.ellipsis, color: CupertinoColors.white, size: 24),
-                onPressed: () {},
               ),
             ],
           ),
@@ -924,44 +969,36 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
                   },
                 ),
 
-                // 3. ↗️ ចែករំលែកទៅក្រុម (Share to groups)
+                // 3. ↗️ ចែករំលែកទៅក្រុម (Share to Real Space/Group)
                 _buildSettingRow(
                   icon: CupertinoIcons.arrowshape_turn_up_right_fill,
-                  title: 'ចែករំលែកទៅក្រុម',
-                  subtitle: _selectedGroup ?? 'ឥឡូវនេះ អ្នកអាចចែករំលែកដោយស្វ័យប្រវត្តិទៅក្រុមដែលពាក់ព័ន្ធ។',
-                  onTap: () {
-                    setState(() => _selectedGroup = 'ក្រុម Spaces Cambodia Creator Club');
-                  },
+                  title: 'ចែករំលែកទៅក្រុម / Space',
+                  subtitle: _selectedGroup ?? 'ជ្រើសរើស Space ដែលអ្នកចង់ចែករំលែក',
+                  onTap: _openGroupSpacePicker,
                 ),
 
                 // 4. 🛍️ បញ្ចូលតំណភ្ជាប់ដៃគូផ្សព្វផ្សាយ (Branded Content)
                 _buildSettingRow(
                   icon: CupertinoIcons.bag_fill,
                   title: 'បញ្ចូលតំណភ្ជាប់ដៃគូផ្សព្វផ្សាយ',
-                  subtitle: _partnerLink ?? 'រួមបញ្ចូលតំណទៅក្នុងផលិតផលដៃគូផ្សព្វផ្សាយនៅក្នុងរ៉េលរបស់អ្នក ហើយអ្នកអាចទទួលបានកម្រៃជើងសារ។',
-                  onTap: () {
-                    _promptPartnerLink();
-                  },
+                  subtitle: _partnerLink ?? 'រួមបញ្ចូលតំណទៅក្នុងផលិតផលដៃគូផ្សព្វផ្សាយនៅក្នុងរ៉េលរបស់អ្នក។',
+                  onTap: _promptPartnerLink,
                 ),
 
                 // 5. ▶️ បញ្ចូលទៅក្នុងបញ្ជីចាក់ (Add to Playlist)
                 _buildSettingRow(
                   icon: CupertinoIcons.play_rectangle_fill,
                   title: 'បញ្ចូលទៅក្នុងបញ្ជីចាក់',
-                  subtitle: _selectedPlaylist ?? 'បង្កើត ឬជ្រើសរើសបញ្ជីចាក់ (Playlist)',
-                  onTap: () {
-                    setState(() => _selectedPlaylist = 'Top Cambodian Reels 2026');
-                  },
+                  subtitle: _selectedPlaylist ?? 'បង្កើត ឬជ្រើសរើសឈ្មោះបញ្ជីចាក់ (Playlist)',
+                  onTap: _promptPlaylistDialog,
                 ),
 
-                // 6. 🏷️ ដាក់ស្លាកមនុស្ស (Tag People)
+                // 6. 🏷️ ដាក់ស្លាកមនុស្ស (Tag Real People)
                 _buildSettingRow(
                   icon: CupertinoIcons.tag_fill,
                   title: 'ដាក់ស្លាកមនុស្ស',
-                  subtitle: _taggedPeople.isEmpty ? 'នេះរាប់បញ្ចូលទាំងដៃគូផងដែរ' : _taggedPeople.join(', '),
-                  onTap: () {
-                    setState(() => _taggedPeople.add('@vin_socheat'));
-                  },
+                  subtitle: _taggedPeople.isEmpty ? 'ស្វែងរក និងដាក់ស្លាកគណនីមិត្តភក្តិ' : _taggedPeople.join(', '),
+                  onTap: _openPeopleTagPicker,
                 ),
 
                 // 7. 📖 ចែករំលែកទៅរឿងរបស់អ្នក (Share to Story)
@@ -980,7 +1017,7 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
                 _buildSettingRow(
                   icon: CupertinoIcons.speaker_2_fill,
                   title: 'បង្កើនការផ្សព្វផ្សាយ Reel',
-                  subtitle: 'ផ្សព្វផ្សាយទៅកាន់អ្នកប្រើប្រាស់រាប់ម៉ឺននាក់',
+                  subtitle: 'បង្ហាញរ៉េលជាអាទិភាពនៅលើ Feed',
                   trailing: CupertinoSwitch(
                     value: _boostReel,
                     activeColor: const Color(0xFF007AFF),
@@ -988,20 +1025,24 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
                   ),
                 ),
 
-                // 9. 🧪 ការធ្វើតេស្ត A/B (A/B Testing)
+                // 9. 🧪 ការធ្វើតេស្ត A/B (A/B Caption Variant)
                 _buildSettingRow(
                   icon: CupertinoIcons.lab_flask,
                   title: 'ការធ្វើតេស្ត A/B',
-                  subtitle: 'សាកល្បង Thumbnail និង Caption ច្រើនបែប',
-                  onTap: () {},
+                  subtitle: _abVariantCaption != null ? 'ចំណងជើង B៖ $_abVariantCaption' : 'បន្ថែមចំណងជើងបន្ទាប់ (Variant B)',
+                  onTap: _promptAbCaptionTest,
                 ),
 
-                // 10. 💰 ការរកលុយ (Monetization)
+                // 10. 💰 ការរកលុយ (Bakong KHQR Monetization)
                 _buildSettingRow(
                   icon: CupertinoIcons.money_dollar_circle_fill,
-                  title: 'ការរកលុយ',
-                  subtitle: 'ផ្ទៀងផ្ទាត់ និងទទួលប្រាក់ចំណូលតាម Bakong KHQR',
-                  onTap: () {},
+                  title: 'ការរកលុយ (Bakong KHQR)',
+                  subtitle: _monetizeTips
+                      ? 'បានបើកទទួលប្រាក់ឧបត្ថម្ភទៅកាន់ ${ApiService().currentUser?.bakongAccountId ?? ""}'
+                      : (ApiService().currentUser?.bakongAccountId?.isNotEmpty == true
+                          ? 'បើកការទទួលប្រាក់ឧបត្ថម្ភទៅ ${ApiService().currentUser!.bakongAccountId}'
+                          : 'ភ្ជាប់ Bakong ID ដើម្បីទទួលប្រាក់ឧបត្ថម្ភ'),
+                  onTap: _openMonetizationSetup,
                 ),
               ],
             ),
@@ -1175,6 +1216,288 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
             onPressed: () {
               setState(() => _partnerLink = linkCtrl.text.trim().isEmpty ? null : linkCtrl.text.trim());
               Navigator.pop(ctx);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReelPreferencesSheet() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => CupertinoActionSheet(
+          title: const Text('ការកំណត់ Reel (Reel Preferences)', style: TextStyle(fontWeight: FontWeight.w700)),
+          message: Text(
+            'កម្រិតគុណភាព៖ HD (រហូតដល់ 250MB ផ្ទុកលើ Cloudflare R2)\nចែករំលែកទៅ Story៖ ${_shareToStory ? "បើក" : "បិទ"} • AI Label៖ ${_aiLabelEnabled ? "បើក" : "បិទ"}',
+          ),
+          actions: [
+            CupertinoActionSheetAction(
+              child: Text(_shareToStory ? '✓ ចែករំលែកទៅ Story ដោយស្វ័យប្រវត្តិ (បើក)' : 'ចែករំលែកទៅ Story ដោយស្វ័យប្រវត្តិ (បិទ)'),
+              onPressed: () {
+                setState(() => _shareToStory = !_shareToStory);
+                setModalState(() {});
+              },
+            ),
+            CupertinoActionSheetAction(
+              child: Text(_aiLabelEnabled ? '✓ បញ្ចូលស្លាក AI (បើក)' : 'បញ្ចូលស្លាក AI (បិទ)'),
+              onPressed: () {
+                setState(() => _aiLabelEnabled = !_aiLabelEnabled);
+                setModalState(() {});
+              },
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('រួចរាល់ (Done)'),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditMoreSheet() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text('ជម្រើសកែវីដេអូ (ល្បឿនបច្ចុប្បន្ន៖ ${_videoSpeed}x)'),
+        actions: [
+          CupertinoActionSheetAction(
+            child: const Text('ប្តូរវីដេអូថ្មីពីទូរស័ព្ទ (Pick New Video)'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _pickVideoFromDevice(captureCamera: false);
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: Text(_videoSpeed == 1.0 ? '✓ ល្បឿនធម្មតា (1.0x)' : 'ល្បឿនធម្មតា (1.0x)'),
+            onPressed: () {
+              setState(() => _videoSpeed = 1.0);
+              Navigator.pop(ctx);
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: Text(_videoSpeed == 1.5 ? '✓ ល្បឿនលឿន (1.5x)' : 'ល្បឿនលឿន (1.5x)'),
+            onPressed: () {
+              setState(() => _videoSpeed = 1.5);
+              Navigator.pop(ctx);
+            },
+          ),
+          CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () {
+              setState(() {
+                _textOverlay = null;
+                _stickerOverlay = null;
+                _activeFilter = 'normal';
+              });
+              Navigator.pop(ctx);
+            },
+            child: const Text('សម្អាតអក្សរ និងស្ទីកគ័រ (Clear Overlays)'),
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('បោះបង់'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openGroupSpacePicker() async {
+    final spaces = await ApiService().fetchSpaces();
+    if (!mounted) return;
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('ជ្រើសរើស Space / ក្រុម'),
+        actions: spaces.isEmpty
+            ? [
+                CupertinoActionSheetAction(
+                  child: const Text('Spaces កម្ពុជា (Public)'),
+                  onPressed: () {
+                    setState(() {
+                      _selectedSpaceId = 'public';
+                      _selectedGroup = 'Spaces កម្ពុជា (Public)';
+                    });
+                    Navigator.pop(ctx);
+                  },
+                ),
+              ]
+            : spaces.map((sp) {
+                return CupertinoActionSheetAction(
+                  child: Text(sp.name),
+                  onPressed: () {
+                    setState(() {
+                      _selectedSpaceId = sp.id;
+                      _selectedGroup = sp.name;
+                    });
+                    Navigator.pop(ctx);
+                  },
+                );
+              }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          isDestructiveAction: true,
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('បោះបង់'),
+        ),
+      ),
+    );
+  }
+
+  void _promptPlaylistDialog() {
+    final ctrl = TextEditingController(text: _selectedPlaylist ?? '');
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('ឈ្មោះបញ្ជីចាក់ (Playlist)'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: ctrl,
+            placeholder: 'ឧ. ដំណើរកម្សាន្ត, អាហារខ្មែរ...',
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('លុបចេញ'),
+            onPressed: () {
+              setState(() => _selectedPlaylist = null);
+              Navigator.pop(ctx);
+            },
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('រក្សាទុក'),
+            onPressed: () {
+              setState(() => _selectedPlaylist = ctrl.text.trim().isEmpty ? null : ctrl.text.trim());
+              Navigator.pop(ctx);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openPeopleTagPicker() async {
+    final users = await ApiService().searchUsers('');
+    if (!mounted) return;
+    final me = ApiService().currentUser?.id;
+    final candidates = users.where((u) => u.id != me).take(12).toList();
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('ដាក់ស្លាកមិត្តភក្តិ (Tag People)'),
+        actions: candidates.isEmpty
+            ? [
+                CupertinoActionSheetAction(
+                  child: const Text('មិនទាន់មានគណនីផ្សេងទៀតទេ'),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+              ]
+            : candidates.map((u) {
+                final handle = '@${u.username}';
+                final already = _taggedPeople.contains(handle);
+                return CupertinoActionSheetAction(
+                  child: Text(already ? '✓ ${u.name} ($handle)' : '${u.name} ($handle)'),
+                  onPressed: () {
+                    setState(() {
+                      if (already) {
+                        _taggedPeople.remove(handle);
+                      } else {
+                        _taggedPeople.add(handle);
+                      }
+                    });
+                    Navigator.pop(ctx);
+                  },
+                );
+              }).toList(),
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('រួចរាល់'),
+        ),
+      ),
+    );
+  }
+
+  void _promptAbCaptionTest() {
+    final ctrl = TextEditingController(text: _abVariantCaption ?? '');
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('ការធ្វើតេស្ត A/B Caption'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: ctrl,
+            placeholder: 'សរសេរចំណងជើងបន្ថែម (Variant B)...',
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('បោះបង់'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('រក្សាទុក'),
+            onPressed: () {
+              setState(() => _abVariantCaption = ctrl.text.trim().isEmpty ? null : ctrl.text.trim());
+              Navigator.pop(ctx);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openMonetizationSetup() {
+    final existingId = ApiService().currentUser?.bakongAccountId?.trim() ?? '';
+    if (existingId.isNotEmpty) {
+      setState(() => _monetizeTips = !_monetizeTips);
+      return;
+    }
+    final bakongCtrl = TextEditingController();
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text('ភ្ជាប់ Bakong KHQR ដើម្បីរកលុយ'),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: CupertinoTextField(
+            controller: bakongCtrl,
+            placeholder: 'ឧ. name@bkrt',
+            autofocus: true,
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('បោះបង់'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text('ភ្ជាប់គណនី'),
+              onPressed: () async {
+              final val = bakongCtrl.text.trim();
+              if (val.isEmpty || !val.contains('@')) return;
+              Navigator.pop(ctx);
+              final user = ApiService().currentUser;
+              final updated = await ApiService().updateStore(
+                storeName: (user?.storeName != null && user!.storeName!.isNotEmpty)
+                    ? user.storeName!
+                    : (user?.name ?? 'Creator Store'),
+                storePhone: (user?.storePhone != null && user!.storePhone!.isNotEmpty)
+                    ? user.storePhone!
+                    : (user?.phone ?? ''),
+                bakongAccountId: val,
+              );
+              if (updated != null && mounted) {
+                setState(() => _monetizeTips = true);
+              }
             },
           ),
         ],

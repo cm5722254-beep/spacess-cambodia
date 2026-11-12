@@ -84,6 +84,9 @@ export class FeedController {
       content?: string;
       audioTitle?: string;
       location?: string;
+      spaceId?: string;
+      tags?: string[];
+      isBoosted?: boolean;
       isAiGenerated?: boolean;
       shareToStory?: boolean;
     },

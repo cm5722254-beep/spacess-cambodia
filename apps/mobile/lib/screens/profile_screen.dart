@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Colors;
 import '../models/post_model.dart';
+import '../models/stream_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/language_service.dart';
@@ -32,9 +33,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   List<PostModel> _myPosts = [];
   List<PostModel> _savedPosts = [];
+  List<PostModel> _likedPosts = [];
+  List<StreamModel> _myStreams = [];
   bool _isLoadingPosts = false;
   int _followerCount = 0;
   int _followingCount = 0;
+  double _bakongSalesTotalUsd = 0.0;
+  int _paidSalesCount = 0;
   List<PublicUserModel> _realFriends = [];
 
   @override
@@ -49,23 +54,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (user != null) {
       final profile = await _api.fetchPublicProfile(user.id);
       final friendsOverview = await _api.fetchFriendsOverview();
+      final orders = await _api.fetchUserOrders();
+      final List rawSales = (orders['sales'] is List) ? orders['sales'] : [];
+      double salesUsd = 0.0;
+      int paidCount = 0;
+      for (final o in rawSales) {
+        if (o is Map && o['status'] == 'PAID') {
+          paidCount++;
+          final amt = o['amount'];
+          final cur = o['currency']?.toString().toUpperCase() ?? 'USD';
+          if (amt is num) {
+            salesUsd += (cur == 'KHR') ? (amt.toDouble() / 4100.0) : amt.toDouble();
+          }
+        }
+      }
       if (mounted) {
         setState(() {
           _followerCount = profile?['followerCount'] ?? 0;
           _followingCount = profile?['followingCount'] ?? 0;
           _realFriends = friendsOverview['friends'] ?? [];
+          _bakongSalesTotalUsd = salesUsd;
+          _paidSalesCount = paidCount;
         });
       }
     }
   }
 
   void _loadTabContent() async {
-    if (_selectedTab == 1) {
+    if (_selectedTab == 1 || _selectedTab == 2 || _selectedTab == 3) {
       setState(() => _isLoadingPosts = true);
       final posts = await _api.fetchMyPosts();
       if (mounted) {
         setState(() {
           _myPosts = posts;
+          _isLoadingPosts = false;
+        });
+      }
+    } else if (_selectedTab == 4) {
+      setState(() => _isLoadingPosts = true);
+      final streams = await _api.fetchStreams(authorId: _api.currentUser?.id);
+      if (mounted) {
+        setState(() {
+          _myStreams = streams;
           _isLoadingPosts = false;
         });
       }
@@ -75,6 +105,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) {
         setState(() {
           _savedPosts = posts;
+          _isLoadingPosts = false;
+        });
+      }
+    } else if (_selectedTab == 6) {
+      setState(() => _isLoadingPosts = true);
+      final feed = await _api.fetchFeed();
+      if (mounted) {
+        setState(() {
+          _likedPosts = feed.where((p) => p.isLiked).toList();
           _isLoadingPosts = false;
         });
       }
@@ -490,7 +529,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 6),
                     CupertinoTextField(
                       controller: avatarCtrl,
-                      placeholder: 'https://images.unsplash.com/...',
+                      placeholder: 'https://...',
                       style: TextStyle(color: AppTheme.primaryText),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -1020,10 +1059,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _openCreatorDashboardSheet() {
+    final totalReactions = _myPosts.fold<int>(0, (sum, p) => sum + p.likeCount);
+    final totalComments = _myPosts.fold<int>(0, (sum, p) => sum + p.commentCount);
+    final reelsCount = _myPosts.where((p) => p.isReel || (p.videoUrl != null && p.videoUrl!.isNotEmpty)).length;
+    final photosCount = _myPosts
+        .where((p) => (p.imageUrl != null && p.imageUrl!.isNotEmpty) && !p.isReel && (p.videoUrl == null || p.videoUrl!.isEmpty))
+        .length;
+
     showCupertinoModalPopup(
       context: context,
       builder: (ctx) => LiquidGlassSheet(
-        initialHeightFraction: 0.75,
+        initialHeightFraction: 0.78,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -1046,10 +1092,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatCol('627', 'អ្នកតាមដាន'),
-                    _buildStatCol('244', 'កំពុងតាមដាន'),
-                    _buildStatCol('12.8K', 'ការចូលមើល'),
-                    _buildStatCol('\$48.50', 'ចំណូល Bakong'),
+                    _buildStatCol('$_followerCount', 'អ្នកតាមដាន'),
+                    _buildStatCol('$_followingCount', 'កំពុងតាមដាន'),
+                    _buildStatCol('${totalReactions + totalComments}', 'អន្តរកម្មពិត'),
+                    _buildStatCol('\$${_bakongSalesTotalUsd.toStringAsFixed(2)}', 'ចំណូល Bakong'),
                   ],
                 ),
               ),
@@ -1061,13 +1107,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 10),
               CupertinoListTile(
                 leading: const Icon(CupertinoIcons.chart_bar_alt_fill, color: Color(0xFF007AFF)),
-                title: const Text('ស្ថិតិ & ទស្សនិកជន (Insights)'),
+                title: const Text('ស្ថិតិ & ទស្សនិកជន (Real Insights)'),
+                subtitle: Text('${_myPosts.length} ប្រកាស • $reelsCount Reels • $photosCount រូបថត'),
                 trailing: const Icon(CupertinoIcons.chevron_forward, size: 16),
-                onTap: () => Navigator.pop(ctx),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showCupertinoDialog(
+                    context: context,
+                    builder: (dCtx) => CupertinoAlertDialog(
+                      title: const Text('ស្ថិតិពិតរបស់គណនីអ្នក'),
+                      content: Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Text(
+                          '• ការបង្ហោះសរុប៖ ${_myPosts.length}\n'
+                          '• វីដេអូ Reels៖ $reelsCount\n'
+                          '• រូបថត៖ $photosCount\n'
+                          '• ចំនួន Reactions សរុប៖ $totalReactions\n'
+                          '• ចំនួន Comments សរុប៖ $totalComments\n'
+                          '• មិត្តភក្តិពិត៖ ${_realFriends.length}\n'
+                          '• ការលក់ Bakong បានទូទាត់៖ $_paidSalesCount (\$${_bakongSalesTotalUsd.toStringAsFixed(2)})',
+                          textAlign: TextAlign.left,
+                        ),
+                      ),
+                      actions: [
+                        CupertinoDialogAction(
+                          isDefaultAction: true,
+                          child: const Text('យល់ព្រម'),
+                          onPressed: () => Navigator.pop(dCtx),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
               CupertinoListTile(
                 leading: const Icon(CupertinoIcons.bag_fill, color: Color(0xFF34C759)),
                 title: const Text('ការទូទាត់ Bakong KHQR (Payouts)'),
+                subtitle: Text(
+                  (_api.currentUser?.bakongAccountId?.isNotEmpty == true)
+                      ? 'Bakong ID: ${_api.currentUser!.bakongAccountId}'
+                      : 'មិនទាន់បានភ្ជាប់ Bakong ID ទេ',
+                ),
                 trailing: const Icon(CupertinoIcons.chevron_forward, size: 16),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -1342,8 +1422,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     : '/default_avatar.svg');
             final userBanner = (_isPageMode && user?.storeBannerUrl != null && user!.storeBannerUrl!.trim().isNotEmpty)
                 ? user.storeBannerUrl!.trim()
-                : (user?.bannerUrl ??
-                    'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=80');
+                : (user?.bannerUrl?.trim() ?? '');
 
             return CupertinoPageScaffold(
       backgroundColor: AppTheme.scaffoldBg,
@@ -1443,12 +1522,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // Cover Banner Photo
                   Stack(
                     children: [
-                      MediaImageView(
-                        url: userBanner,
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
+                      if (userBanner.isNotEmpty)
+                        MediaImageView(
+                          url: userBanner,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        )
+                      else
+                        Container(
+                          height: 120,
+                          width: double.infinity,
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xFF0A2E5C), Color(0xFF1C3A70), Color(0xFF1E293B)],
+                            ),
+                          ),
+                        ),
                       // Gradient overlay
                       Positioned.fill(
                         child: DecoratedBox(
@@ -1845,7 +1937,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             const SizedBox(height: 12),
 
-            // Quick Action Chips matching screenshot: [🔖 បានរក្សាទុក] [👍 បានចូលចិត្ត] [↗️ បានចែករំលែក] [👁️ ត្រូវការពិនិត្យមើល]
+            // Quick Action Chips: [🔖 បានរក្សាទុក] [👍 បានចូលចិត្ត] [🎬 Reels របស់ខ្ញុំ] [🛡️ ពិនិត្យគណនី]
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
@@ -1856,11 +1948,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     _loadTabContent();
                   }),
                   const SizedBox(width: 8),
-                  _buildQuickActionChip(CupertinoIcons.hand_thumbsup, 'បានចូលចិត្ត', () {}),
+                  _buildQuickActionChip(CupertinoIcons.hand_thumbsup, 'បានចូលចិត្ត', () {
+                    setState(() => _selectedTab = 6); // Liked tab
+                    _loadTabContent();
+                  }),
                   const SizedBox(width: 8),
-                  _buildQuickActionChip(CupertinoIcons.arrowshape_turn_up_right, 'បានចែករំលែក', () {}),
+                  _buildQuickActionChip(CupertinoIcons.film, 'Reels របស់ខ្ញុំ', () {
+                    setState(() => _selectedTab = 2); // Reels tab
+                    _loadTabContent();
+                  }),
                   const SizedBox(width: 8),
-                  _buildQuickActionChip(CupertinoIcons.eye, 'ត្រូវការពិនិត្យមើល', () {}),
+                  _buildQuickActionChip(CupertinoIcons.eye, 'ពិនិត្យគណនី', _openProfileHealthCheckSheet),
                 ],
               ),
             ),
@@ -1909,7 +2007,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
             ],
 
-            // Tab 2: Reels (Matching c88e532b.jpg Clapperboard Empty State or Grid)
+            // Tab 2: Real User Reels
             if (_selectedTab == 2) ...[
               if (_isLoadingPosts)
                 const Center(
@@ -1918,108 +2016,247 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: CupertinoActivityIndicator(radius: 14),
                   ),
                 )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
-                  decoration: BoxDecoration(
-                    color: AppTheme.cardBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.border, width: 0.8),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+              else ...[
+                Builder(builder: (context) {
+                  final myReels = _myPosts.where((p) => p.isReel || (p.videoUrl != null && p.videoUrl!.isNotEmpty)).toList();
+                  if (myReels.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppTheme.border, width: 0.8),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF007AFF).withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                CupertinoIcons.film_fill,
+                                size: 46,
+                                color: Color(0xFF007AFF),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'មិនទាន់មានរ៉េលទេ',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.primaryText,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                            color: const Color(0xFF007AFF),
+                            borderRadius: BorderRadius.circular(12),
+                            onPressed: () {
+                              CreateReelSheet.show(context, onReelCreated: _loadTabContent);
+                            },
+                            child: const Text(
+                              'បង្កើតរ៉េល',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                color: CupertinoColors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return Column(
                     children: [
-                      // Clapperboard Illustration
-                      Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF007AFF).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            CupertinoIcons.film_fill,
-                            size: 46,
-                            color: Color(0xFF007AFF),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: CupertinoButton(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            color: const Color(0xFF007AFF),
+                            borderRadius: BorderRadius.circular(10),
+                            onPressed: () => CreateReelSheet.show(context, onReelCreated: _loadTabContent),
+                            child: const Text(
+                              '+ បង្កើតរ៉េលថ្មី',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: CupertinoColors.white),
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'មិនទាន់មានរ៉េលទេ',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.primaryText,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      CupertinoButton(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                        color: const Color(0xFF007AFF),
-                        borderRadius: BorderRadius.circular(12),
-                        onPressed: () {
-                          CreateReelSheet.show(context, onReelCreated: _loadTabContent);
-                        },
-                        child: const Text(
-                          'បង្កើតរ៉េល',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                            color: CupertinoColors.white,
-                          ),
+                      ...myReels.map(
+                        (post) => PostCard(
+                          post: post,
+                          onCommentTap: () => _openComments(post),
+                          onPostDeleted: _loadTabContent,
+                          onPostUpdated: _loadTabContent,
                         ),
                       ),
                     ],
+                  );
+                }),
+              ],
+            ],
+
+            // Tab 3: Real User Photos Grid
+            if (_selectedTab == 3) ...[
+              if (_isLoadingPosts)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CupertinoActivityIndicator(radius: 14),
+                  ),
+                )
+              else ...[
+                Builder(builder: (context) {
+                  final myPhotos = _myPosts
+                      .where((p) =>
+                          (p.imageUrl != null && p.imageUrl!.isNotEmpty) &&
+                          !p.isReel &&
+                          (p.videoUrl == null || p.videoUrl!.isEmpty))
+                      .toList();
+                  if (myPhotos.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: AppTheme.cardBg,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppTheme.border, width: 0.6),
+                      ),
+                      child: Column(
+                        children: [
+                          const Icon(CupertinoIcons.photo, size: 40, color: CupertinoColors.systemGrey3),
+                          const SizedBox(height: 12),
+                          Text(
+                            'មិនទាន់មានរូបថតដែលបានបង្ហោះនៅឡើយទេ',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: AppTheme.secondaryText, height: 1.4),
+                          ),
+                          const SizedBox(height: 14),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            color: const Color(0xFF007AFF),
+                            borderRadius: BorderRadius.circular(10),
+                            onPressed: _openCreateMenuSheet,
+                            child: const Text(
+                              '+ បង្ហោះរូបថត',
+                              style: TextStyle(color: CupertinoColors.white, fontSize: 13, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 6,
+                      mainAxisSpacing: 6,
+                    ),
+                    itemCount: myPhotos.length,
+                    itemBuilder: (ctx, idx) {
+                      final photoPost = myPhotos[idx];
+                      return GestureDetector(
+                        onTap: () => _openComments(photoPost),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: MediaImageView(
+                            url: photoPost.imageUrl!,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                }),
+              ],
+            ],
+
+            // Tab 4: Events & Streams Created by User
+            if (_selectedTab == 4) ...[
+              if (_isLoadingPosts)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CupertinoActivityIndicator(radius: 14),
+                  ),
+                )
+              else if (_myStreams.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBg,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppTheme.border, width: 0.6),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(CupertinoIcons.calendar, size: 40, color: CupertinoColors.systemGrey3),
+                      const SizedBox(height: 12),
+                      Text(
+                        'មិនទាន់មានការផ្សាយផ្ទាល់ ឬព្រឹត្តិការណ៍ទេ',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppTheme.secondaryText, height: 1.4),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ..._myStreams.map(
+                  (st) => Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBg,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppTheme.border, width: 0.8),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: st.isLive ? const Color(0xFFFF3B30).withOpacity(0.15) : const Color(0xFF007AFF).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            st.isLive ? CupertinoIcons.dot_radiowaves_left_right : CupertinoIcons.play_rectangle_fill,
+                            color: st.isLive ? const Color(0xFFFF3B30) : const Color(0xFF007AFF),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                st.title,
+                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppTheme.primaryText),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                '${st.isLive ? "🔴 កំពុងផ្សាយផ្ទាល់" : "វីដេអូ/ព្រឹត្តិការណ៍"} • អ្នកមើល ${st.viewerCount}',
+                                style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-            ],
-
-            // Tab 3: Photos
-            if (_selectedTab == 3) ...[
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppTheme.border, width: 0.6),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(CupertinoIcons.photo, size: 40, color: CupertinoColors.systemGrey3),
-                    const SizedBox(height: 12),
-                    Text(
-                      'មិនទាន់មានរូបថតដែលបានបង្ហោះនៅឡើយទេ',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppTheme.secondaryText, height: 1.4),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // Tab 4: Events
-            if (_selectedTab == 4) ...[
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBg,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppTheme.border, width: 0.6),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(CupertinoIcons.calendar, size: 40, color: CupertinoColors.systemGrey3),
-                    const SizedBox(height: 12),
-                    Text(
-                      'មិនទាន់មានព្រឹត្តិការណ៍ដែលបានបង្កើតទេ',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: AppTheme.secondaryText, height: 1.4),
-                    ),
-                  ],
-                ),
-              ),
             ],
 
             // Tab 5: Saved Posts
@@ -2064,6 +2301,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
             ],
+
+            // Tab 6: Liked Posts
+            if (_selectedTab == 6) ...[
+              if (_isLoadingPosts)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(40),
+                    child: CupertinoActivityIndicator(radius: 14),
+                  ),
+                )
+              else if (_likedPosts.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: AppTheme.cardBg,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppTheme.border, width: 0.6),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(CupertinoIcons.hand_thumbsup, size: 40, color: CupertinoColors.systemGrey3),
+                      const SizedBox(height: 12),
+                      Text(
+                        'មិនទាន់មានការបង្ហោះដែលអ្នកបានចូលចិត្តទេ',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppTheme.secondaryText, height: 1.4),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                ..._likedPosts.map(
+                  (post) => PostCard(
+                    post: post,
+                    onCommentTap: () => _openComments(post),
+                    onPostDeleted: _loadTabContent,
+                    onPostUpdated: _loadTabContent,
+                  ),
+                ),
+            ],
             const SizedBox(height: 50),
           ],
         ),
@@ -2074,6 +2351,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
           },
         );
       },
+    );
+  }
+
+  void _openProfileHealthCheckSheet() {
+    final user = _api.currentUser;
+    final hasAvatar = user?.avatar != null && !user!.avatar.contains('default_avatar');
+    final hasBanner = user?.bannerUrl != null && user!.bannerUrl!.isNotEmpty;
+    final hasBio = user?.bio != null && user!.bio!.isNotEmpty;
+    final hasBakong = user?.bakongAccountId != null && user!.bakongAccountId!.contains('@');
+    final has2fa = user?.twoFactorEnabled == true;
+
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('ពិនិត្យស្ថានភាពគណនី (Account Review)', style: TextStyle(fontWeight: FontWeight.w700)),
+        message: const Text('ចុចលើចំណុចណាមួយដើម្បីកែសម្រួលឱ្យគណនីកាន់តែពេញលេញ និងសុវត្ថិភាព'),
+        actions: [
+          CupertinoActionSheetAction(
+            child: Text('${hasAvatar ? "✅" : "⚠️"} រូបតំណាង (Profile Avatar)'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _pickAndUploadAvatar();
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: Text('${hasBanner ? "✅" : "⚠️"} រូបភាព Banner (Cover Photo)'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openChangeBannerSheet();
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: Text('${hasBio ? "✅" : "⚠️"} ព័ត៌មាន Bio & ទីតាំង'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openEditProfileSheet();
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: Text('${hasBakong ? "✅" : "⚠️"} Bakong KHQR ID (${hasBakong ? user.bakongAccountId : "មិនទាន់ភ្ជាប់"})'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openStoreSettingsSheet();
+            },
+          ),
+          CupertinoActionSheetAction(
+            child: Text('${has2fa ? "✅" : "⚠️"} សុវត្ថិភាព 2FA (${has2fa ? "បើក" : "បិទ"})'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openSettingsDrawerSheet();
+            },
+          ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('បិទ'),
+        ),
+      ),
     );
   }
 }

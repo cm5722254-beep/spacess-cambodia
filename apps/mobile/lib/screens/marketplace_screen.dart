@@ -852,10 +852,11 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
       return;
     }
 
-    final finalImageUrl = _importedMediaUrl ??
-        (_imageUrlCtrl.text.trim().isNotEmpty
-            ? _imageUrlCtrl.text.trim()
-            : 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80');
+    final finalImageUrl = _importedMediaUrl ?? _imageUrlCtrl.text.trim();
+    if (finalImageUrl.isEmpty) {
+      _showError(tr('សូមជ្រើសរើសរូបភាពទំនិញជាមុនសិន', 'Please upload or select a product photo first'));
+      return;
+    }
 
     setState(() => _isLoading = true);
     final created = await ApiService().createProduct(

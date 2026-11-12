@@ -535,11 +535,12 @@ export class DbService implements OnModuleInit {
     tags?: string[];
     templateStyle?: string;
     moodTag?: string;
+    isBoosted?: boolean;
     isReel?: boolean;
     reelAudioTitle?: string;
   }): PostEntity {
     const author = this.findUserById(dto.authorId);
-    const isBoosted = author?.subscriptionTier === 'PRO_PLUS' || author?.subscriptionTier === 'ULTRA';
+    const isBoosted = dto.isBoosted === true || author?.subscriptionTier === 'PRO_PLUS' || author?.subscriptionTier === 'ULTRA';
     const newPost: PostEntity = {
       id: `p-${Date.now()}`,
       authorId: dto.authorId,
@@ -880,7 +881,7 @@ export class DbService implements OnModuleInit {
       priceKhr: Math.round(dto.priceUsd * 4100),
       category: dto.category || 'Electronics',
       condition: dto.condition || 'ថ្មី (Brand New)',
-      imageUrl: dto.imageUrl || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80',
+      imageUrl: dto.imageUrl || '',
       location: dto.location || 'ភ្នំពេញ (Phnom Penh)',
       description: dto.description.trim(),
       sellerId: dto.sellerId,

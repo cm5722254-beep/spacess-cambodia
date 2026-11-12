@@ -282,10 +282,26 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                   borderRadius: BorderRadius.circular(12),
                   child: Text(tr('បង្ហោះ Story ឥឡូវនេះ (Share Story)', 'Share Story')),
                   onPressed: () async {
-                    final finalUrl = importedStoryMedia ??
-                        (imageCtrl.text.trim().isNotEmpty
-                            ? imageCtrl.text.trim()
-                            : 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=800&q=80');
+                    final finalUrl = importedStoryMedia ?? imageCtrl.text.trim();
+                    if (finalUrl.isEmpty) {
+                      showCupertinoDialog(
+                        context: ctx,
+                        builder: (dCtx) => CupertinoAlertDialog(
+                          title: Text(tr('សូមជ្រើសរើសរូបភាព ឬវីដេអូ', 'Select Media')),
+                          content: Text(tr(
+                            'សូមជ្រើសរើសរូបភាព ឬវីដេអូពីទូរស័ព្ទ ឬបញ្ចូលតំណភ្ជាប់ពិតប្រាកដជាមុនសិន។',
+                            'Please pick a photo/video or enter a valid media URL first.',
+                          )),
+                          actions: [
+                            CupertinoDialogAction(
+                              child: const Text('យល់ព្រម'),
+                              onPressed: () => Navigator.pop(dCtx),
+                            ),
+                          ],
+                        ),
+                      );
+                      return;
+                    }
                     Navigator.pop(ctx);
                     final ok = await ApiService().createStory(
                       imageUrl: finalUrl,
