@@ -2,7 +2,13 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { getR2Config, getR2Object, putR2Object } from '../storage/r2-client.util';
+import {
+  decryptDbBuffer,
+  encryptDbBuffer,
+  getR2Config,
+  getR2Object,
+  putR2Object,
+} from '../storage/r2-client.util';
 
 export interface UserEntity {
   id: string;
@@ -253,7 +259,7 @@ export interface DatabaseState {
 
 @Injectable()
 export class DbService implements OnModuleInit, OnModuleDestroy {
-  private readonly r2StateKey = 'db/spaces_db.json';
+  private readonly r2StateKey = 'private/spaces_db.enc';
   private dbPath: string;
   private r2SyncTimer: NodeJS.Timeout | null = null;
   private r2SyncPending = false;
@@ -341,14 +347,16 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    if (getR2Config()) {
+    const r2Cfg = getR2Config();
+    if (r2Cfg) {
       try {
         const r2Res = await getR2Object(this.r2StateKey);
         if (r2Res && r2Res.ok) {
-          const text = await r2Res.text();
+          const buf = Buffer.from(await r2Res.arrayBuffer());
+          const text = decryptDbBuffer(buf, r2Cfg);
           this.state = this.normalizeState(JSON.parse(text));
           this.save(false);
-          console.log(`[DbService] Restored database from Cloudflare R2 (Users: ${this.state.users.length}, Posts: ${this.state.posts.length})`);
+          console.log(`[DbService] Restored encrypted database from Cloudflare R2 (Users: ${this.state.users.length}, Posts: ${this.state.posts.length})`);
           return;
         }
       } catch (err) {
@@ -385,11 +393,12 @@ export class DbService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async pushStateToR2() {
-    if (!getR2Config()) return;
+    const r2Cfg = getR2Config();
+    if (!r2Cfg) return;
     this.r2SyncPending = true;
     try {
-      const payload = Buffer.from(JSON.stringify(this.state), 'utf8');
-      const res = await putR2Object(this.r2StateKey, payload, 'application/json');
+      const payload = encryptDbBuffer(JSON.stringify(this.state), r2Cfg);
+      const res = await putR2Object(this.r2StateKey, payload, 'application/octet-stream');
       if (!res.ok) {
         console.warn(`[DbService] R2 backup returned ${res.status ?? 'error'}: ${(res.errorText || '').slice(0, 150)}`);
       }

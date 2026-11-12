@@ -158,3 +158,36 @@ export async function getR2Object(
   const { endpointUrl, headers } = signR2Request(cfg, 'GET', objectKey, emptyHash, extra);
   return fetch(endpointUrl, { method: 'GET', headers });
 }
+
+export async function deleteR2Object(objectKey: string): Promise<boolean> {
+  const cfg = getR2Config();
+  if (!cfg || !objectKey) return false;
+  const emptyHash = sha256Hex('');
+  const { endpointUrl, headers } = signR2Request(cfg, 'DELETE', objectKey, emptyHash);
+  const res = await fetch(endpointUrl, { method: 'DELETE', headers });
+  return res.ok;
+}
+
+function getDbEncryptionKey(cfg: R2Config): Buffer {
+  const seed = (process.env.DB_SYNC_KEY || '').trim() || cfg.secretAccessKey;
+  return crypto.createHash('sha256').update(`spaces-db:${seed}`, 'utf8').digest();
+}
+
+export function encryptDbBuffer(plainUtf8: string, cfg: R2Config): Buffer {
+  const key = getDbEncryptionKey(cfg);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const enc = Buffer.concat([cipher.update(plainUtf8, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, enc]);
+}
+
+export function decryptDbBuffer(payload: Buffer, cfg: R2Config): string {
+  const key = getDbEncryptionKey(cfg);
+  const iv = payload.subarray(0, 12);
+  const tag = payload.subarray(12, 28);
+  const enc = payload.subarray(28);
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+}
