@@ -65,6 +65,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return CupertinoIcons.heart_fill;
       case 'COMMENT':
         return CupertinoIcons.chat_bubble_fill;
+      case 'ORDER_PAID':
+        return CupertinoIcons.bag_fill;
+      case 'ORDER_UPDATE':
+        return CupertinoIcons.cube_box_fill;
+      case 'FRIEND':
+        return CupertinoIcons.person_add_solid;
       case 'TIME_CAPSULE':
         return CupertinoIcons.lock_shield_fill;
       default:
@@ -78,6 +84,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return const Color(0xFFFF2D55);
       case 'COMMENT':
         return const Color(0xFF007AFF);
+      case 'ORDER_PAID':
+        return const Color(0xFF34C759);
+      case 'ORDER_UPDATE':
+        return const Color(0xFF0A84FF);
+      case 'FRIEND':
+        return const Color(0xFF5856D6);
       case 'TIME_CAPSULE':
         return const Color(0xFFFF9500);
       default:

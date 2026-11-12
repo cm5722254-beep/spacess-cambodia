@@ -494,6 +494,28 @@ export class FeedController {
     return this.feedService.getBlockedUsers(actingUserId);
   }
 
+  @Get('notifications')
+  @ApiOperation({ summary: 'Get persistent notification history for user' })
+  getNotifications(
+    @Headers('authorization') authHeader: string,
+    @Query('userId') userId: string = '',
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) return [];
+    return this.feedService.getNotifications(actingUserId);
+  }
+
+  @Patch('notifications/:id/read')
+  @ApiOperation({ summary: 'Mark a notification as read' })
+  markNotificationRead(
+    @Param('id') id: string,
+    @Headers('authorization') authHeader: string,
+    @Query('userId') userId: string = '',
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    return this.feedService.markNotificationRead(id, actingUserId || undefined);
+  }
+
   @Get('search')
   @ApiOperation({ summary: 'Search posts, spaces, hashtags, and members' })
   @ApiQuery({ name: 'q', required: false })

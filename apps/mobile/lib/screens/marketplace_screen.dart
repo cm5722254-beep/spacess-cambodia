@@ -1525,8 +1525,13 @@ class _OrdersTrackingSheetState extends State<_OrdersTrackingSheet> {
 
   Widget _buildOrderCard(Map<String, dynamic> order) {
     final title = order['productTitle']?.toString() ?? '';
+    final billNumber = order['billNumber']?.toString() ?? '';
+    final qty = (order['quantity'] is num) ? (order['quantity'] as num).toInt() : 1;
     final amount = order['amount']?.toString() ?? '0';
     final currency = order['currency']?.toString() ?? 'USD';
+    final buyerPhone = order['buyerPhone']?.toString() ?? '';
+    final shippingAddr = order['shippingAddress']?.toString() ?? '';
+    final buyerNote = order['buyerNote']?.toString() ?? '';
     final payStatus = order['status']?.toString() ?? 'PENDING';
     final fulStatus = order['fulfillmentStatus']?.toString() ?? 'PROCESSING';
     final note = order['trackingNote']?.toString() ?? '';
@@ -1553,7 +1558,7 @@ class _OrdersTrackingSheetState extends State<_OrdersTrackingSheet> {
             children: [
               Expanded(
                 child: Text(
-                  title,
+                  qty > 1 ? '$title (x$qty)' : title,
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
                 ),
               ),
@@ -1577,9 +1582,31 @@ class _OrdersTrackingSheetState extends State<_OrdersTrackingSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            '$amount $currency • ${isSale ? tr("អតិថិជន", "Buyer") : tr("អ្នកលក់", "Seller")}: $counterpartyName',
+            '\$$amount $currency • $billNumber • ${isSale ? tr("អ្នកទិញ", "Buyer") : tr("អ្នកលក់", "Seller")}: $counterpartyName',
             style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
           ),
+          if (buyerPhone.isNotEmpty || shippingAddr.isNotEmpty || buyerNote.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppTheme.fieldBg,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (buyerPhone.isNotEmpty)
+                    Text('📞 $buyerPhone', style: TextStyle(fontSize: 12, color: AppTheme.primaryText, fontWeight: FontWeight.w600)),
+                  if (shippingAddr.isNotEmpty)
+                    Text('📍 $shippingAddr', style: TextStyle(fontSize: 12, color: AppTheme.primaryText)),
+                  if (buyerNote.isNotEmpty)
+                    Text('📝 $buyerNote', style: TextStyle(fontSize: 11, color: AppTheme.secondaryText)),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           // 4-step Delivery Stepper
           Row(

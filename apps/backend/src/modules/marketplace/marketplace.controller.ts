@@ -76,6 +76,10 @@ export class MarketplaceController {
       productId: string;
       buyerId?: string;
       currency?: string;
+      quantity?: number;
+      buyerPhone?: string;
+      shippingAddress?: string;
+      buyerNote?: string;
     },
   ) {
     return this.marketplaceService.checkout(body);

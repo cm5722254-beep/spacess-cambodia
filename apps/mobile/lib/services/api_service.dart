@@ -528,7 +528,10 @@ class ApiService {
 
   Future<List<NotificationModel>> fetchNotifications() async {
     try {
-      final response = await _dio.get('/notifications');
+      final response = await _dio.get(
+        '/notifications',
+        queryParameters: {'userId': currentUser?.id ?? ''},
+      );
       if (response.statusCode == 200 && response.data['success'] == true) {
         final List raw = response.data['data'] ?? [];
         return raw.map((n) => NotificationModel.fromJson(n)).toList();
@@ -1084,6 +1087,10 @@ class ApiService {
   Future<Map<String, dynamic>?> checkoutProduct({
     required String productId,
     String currency = 'USD',
+    int quantity = 1,
+    String? buyerPhone,
+    String? shippingAddress,
+    String? buyerNote,
   }) async {
     try {
       final response = await _dio.post(
@@ -1092,6 +1099,10 @@ class ApiService {
           'productId': productId,
           'buyerId': currentUser?.id ?? 'guest',
           'currency': currency,
+          'quantity': quantity,
+          if (buyerPhone != null && buyerPhone.isNotEmpty) 'buyerPhone': buyerPhone,
+          if (shippingAddress != null && shippingAddress.isNotEmpty) 'shippingAddress': shippingAddress,
+          if (buyerNote != null && buyerNote.isNotEmpty) 'buyerNote': buyerNote,
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {

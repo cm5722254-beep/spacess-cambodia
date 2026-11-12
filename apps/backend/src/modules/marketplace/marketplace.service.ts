@@ -101,7 +101,15 @@ export class MarketplaceService {
   }
 
   // --- BAKONG CHECKOUT & KHQR INTEGRATION ---
-  async checkout(dto: { productId: string; buyerId?: string; currency?: string }) {
+  async checkout(dto: {
+    productId: string;
+    buyerId?: string;
+    currency?: string;
+    quantity?: number;
+    buyerPhone?: string;
+    shippingAddress?: string;
+    buyerNote?: string;
+  }) {
     const products = this.db.getProducts();
     const product = products.find((p) => p.id === dto.productId);
     if (!product) {
@@ -111,6 +119,7 @@ export class MarketplaceService {
     const seller = this.db.findUserById(product.sellerId);
     const buyerId = dto.buyerId || 'guest';
     const buyer = this.db.findUserById(buyerId);
+    const qty = Math.max(1, Math.min(99, Number(dto.quantity) || 1));
 
     const sellerBakongId = (seller?.bakongAccountId && seller.bakongAccountId.trim())
       ? seller.bakongAccountId.trim()
@@ -128,8 +137,12 @@ export class MarketplaceService {
         ? product.sellerStoreName.trim()
         : (seller?.name || 'Spaces Merchant');
     const billNumber = `INV-${Date.now()}`;
-    const amount = product.priceUsd;
+    const unitPrice = product.priceUsd;
+    const amount = Number((unitPrice * qty).toFixed(2));
     const currency = dto.currency || 'USD';
+    const buyerPhone = (dto.buyerPhone || buyer?.phone || '').trim();
+    const shippingAddress = (dto.shippingAddress || buyer?.location || '').trim();
+    const buyerNote = (dto.buyerNote || '').trim();
 
     try {
       const response = await fetch(`${this.GATEWAY_URL}/api/v1/khqr/generate`, {
@@ -157,10 +170,15 @@ export class MarketplaceService {
         billNumber,
         productId: product.id,
         productTitle: product.title,
+        quantity: qty,
+        unitPrice,
         amount,
         currency,
         buyerId,
         buyerName: buyer?.name || 'Guest Buyer',
+        buyerPhone,
+        shippingAddress,
+        buyerNote,
         sellerId: product.sellerId,
         sellerName: seller?.name || 'Seller',
         sellerStoreName: merchantName,
@@ -180,6 +198,8 @@ export class MarketplaceService {
         deeplink: khqr.deeplink,
         qrString: khqr.qrString,
         amount,
+        quantity: qty,
+        unitPrice,
         currency,
         merchantName,
         sellerBakongId,
@@ -207,13 +227,58 @@ export class MarketplaceService {
       const status = await response.json();
 
       if (status.responseCode === 0) {
+        const wasPaidBefore = existingOrder?.status === 'PAID';
         // Payment verified & settled on NBC ledger!
         const updated = this.db.updateOrderStatus(md5, 'PAID', status.data);
-        if (updated) {
+        if (updated && !wasPaidBefore) {
+          const qtyLabel = updated.quantity && updated.quantity > 1 ? ` (${updated.quantity}x)` : '';
+          const phonePart = updated.buyerPhone ? ` • 📞 ${updated.buyerPhone}` : '';
+          const addrPart = updated.shippingAddress ? ` • 📍 ${updated.shippingAddress}` : '';
+          const summaryBody = `${updated.productTitle}${qtyLabel} — \$${updated.amount} ${updated.currency}${phonePart}${addrPart}`;
+
+          // 1) Persist seller bell notification
+          this.db.createNotification({
+            userId: updated.sellerId,
+            actorId: updated.buyerId,
+            type: 'ORDER_PAID',
+            title: `បានបញ្ជាទិញ និងបង់លុយ KHQR ជោគជ័យ`,
+            body: summaryBody,
+            refId: updated.id,
+          });
+
+          // 2) Auto-send receipt message to Seller Chat Inbox
+          if (updated.buyerId && updated.buyerId !== 'guest' && updated.buyerId !== updated.sellerId) {
+            try {
+              const chat = this.db.getOrCreateChat(updated.buyerId, updated.sellerId);
+              const receiptText = [
+                `🧾 វិក្កយបត្របញ្ជាទិញថ្មី (PAID KHQR)`,
+                `• លេខបុង: ${updated.billNumber}`,
+                `• ទំនិញ: ${updated.productTitle}${qtyLabel}`,
+                `• ទឹកប្រាក់បានបង់: \$${updated.amount} ${updated.currency}`,
+                `• អ្នកទិញ: ${updated.buyerName || 'Customer'}`,
+                updated.buyerPhone ? `• ទូរស័ព្ទ: ${updated.buyerPhone}` : '',
+                updated.shippingAddress ? `• ទីតាំងផ្ញើ: ${updated.shippingAddress}` : '',
+                updated.buyerNote ? `• កំណត់ចំណាំ: ${updated.buyerNote}` : '',
+              ]
+                .filter(Boolean)
+                .join('\n');
+              const chatMsg = this.db.sendMessage(chat.id, updated.buyerId, receiptText, undefined, 'text');
+              this.events.emitToUser(updated.sellerId, {
+                type: 'CHAT_MESSAGE',
+                title: `🧾 ការបញ្ជាទិញថ្មីពី ${updated.buyerName || 'Customer'}`,
+                body: `${updated.productTitle}${qtyLabel} (\$${updated.amount})`,
+                data: { chatId: chat.id, messageId: chatMsg.id },
+              });
+            } catch (e) {
+              console.warn('[MarketplaceService] Auto receipt chat skipped:', e);
+            }
+          }
+
+          // 3) Real-time SSE Order Update
           this.events.emitToUsers([updated.buyerId, updated.sellerId], {
             type: 'ORDER_UPDATE',
             title: 'ការទូទាត់ Bakong KHQR ជោគជ័យ',
-            body: `${updated.productTitle} (\$${updated.amount})`,
+            body: summaryBody,
             data: { orderId: updated.id, status: 'PAID' },
           });
         }
@@ -260,6 +325,15 @@ export class MarketplaceService {
       SHIPPING: 'កំពុងដឹកជញ្ជូនដល់លោកអ្នក',
       DELIVERED: 'ទំនិញត្រូវបានប្រគល់ជូនរួចរាល់',
     };
+    const notifyTarget = actingUserId === updated.sellerId ? updated.buyerId : updated.sellerId;
+    this.db.createNotification({
+      userId: notifyTarget,
+      actorId: actingUserId,
+      type: 'ORDER_UPDATE',
+      title: `ដំណើរការទំនិញ: ${statusLabels[fulfillmentStatus] || fulfillmentStatus}`,
+      body: `${updated.productTitle}${updated.trackingNote ? ` • ${updated.trackingNote}` : ''}`,
+      refId: updated.id,
+    });
     this.events.emitToUsers([updated.buyerId, updated.sellerId], {
       type: 'ORDER_UPDATE',
       title: `បច្ចុប្បន្នភាពការដឹកជញ្ជូន: ${statusLabels[fulfillmentStatus] || fulfillmentStatus}`,

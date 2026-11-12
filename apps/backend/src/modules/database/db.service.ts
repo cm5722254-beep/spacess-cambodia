@@ -107,10 +107,15 @@ export interface OrderEntity {
   billNumber: string;
   productId: string;
   productTitle: string;
+  quantity?: number;
+  unitPrice?: number;
   amount: number;
   currency: string;
   buyerId: string;
   buyerName?: string;
+  buyerPhone?: string;
+  shippingAddress?: string;
+  buyerNote?: string;
   sellerId: string;
   sellerName?: string;
   sellerStoreName?: string;
@@ -125,6 +130,20 @@ export interface OrderEntity {
   transactionData?: any;
   paidAt?: string;
   updatedAt?: string;
+  createdAt: string;
+}
+
+export interface NotificationEntity {
+  id: string;
+  userId: string;
+  actorId: string;
+  actorName: string;
+  actorAvatar: string;
+  type: 'LIKE' | 'COMMENT' | 'FRIEND' | 'ORDER_PAID' | 'ORDER_UPDATE';
+  title: string;
+  body: string;
+  refId?: string;
+  isRead: boolean;
   createdAt: string;
 }
 
@@ -228,6 +247,7 @@ export interface DatabaseState {
   messages: MessageEntity[];
   reports?: ReportEntity[];
   blockedUsers?: BlockEntity[];
+  notifications?: NotificationEntity[];
 }
 
 @Injectable()
@@ -249,6 +269,7 @@ export class DbService implements OnModuleInit {
     messages: [],
     reports: [],
     blockedUsers: [],
+    notifications: [],
   };
 
   onModuleInit() {
@@ -278,6 +299,7 @@ export class DbService implements OnModuleInit {
         if (!this.state.messages) this.state.messages = [];
         if (!this.state.reports) this.state.reports = [];
         if (!this.state.blockedUsers) this.state.blockedUsers = [];
+        if (!this.state.notifications) this.state.notifications = [];
         console.log(`[DbService] Database loaded from ${this.dbPath} (Users: ${this.state.users.length}, Posts: ${this.state.posts.length})`);
         return;
       } catch (err) {
@@ -969,10 +991,15 @@ export class DbService implements OnModuleInit {
     billNumber: string;
     productId: string;
     productTitle: string;
+    quantity?: number;
+    unitPrice?: number;
     amount: number;
     currency: string;
     buyerId: string;
     buyerName?: string;
+    buyerPhone?: string;
+    shippingAddress?: string;
+    buyerNote?: string;
     sellerId: string;
     sellerName?: string;
     sellerStoreName?: string;
@@ -1671,6 +1698,53 @@ export class DbService implements OnModuleInit {
     report.resolvedAt = new Date().toISOString();
     this.save();
     return { success: true, report };
+  }
+
+  // --- PERSISTENT NOTIFICATIONS ---
+  createNotification(input: {
+    userId: string;
+    actorId: string;
+    type: 'LIKE' | 'COMMENT' | 'FRIEND' | 'ORDER_PAID' | 'ORDER_UPDATE';
+    title: string;
+    body: string;
+    refId?: string;
+  }): NotificationEntity | null {
+    if (!input.userId) return null;
+    if (!this.state.notifications) this.state.notifications = [];
+    const actor = this.findUserById(input.actorId);
+    const notif: NotificationEntity = {
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      userId: input.userId,
+      actorId: input.actorId,
+      actorName: actor?.name || 'Spaces User',
+      actorAvatar: actor?.avatar || '/default_avatar.svg',
+      type: input.type,
+      title: input.title,
+      body: input.body,
+      refId: input.refId,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+    };
+    this.state.notifications.unshift(notif);
+    if (this.state.notifications.length > 1000) {
+      this.state.notifications = this.state.notifications.slice(0, 1000);
+    }
+    this.save();
+    return notif;
+  }
+
+  getNotificationsForUser(userId: string): NotificationEntity[] {
+    if (!this.state.notifications || !userId) return [];
+    return this.state.notifications.filter((n) => n.userId === userId).slice(0, 100);
+  }
+
+  markNotificationRead(id: string, userId?: string): boolean {
+    if (!this.state.notifications) return false;
+    const notif = this.state.notifications.find((n) => n.id === id && (!userId || n.userId === userId));
+    if (!notif) return false;
+    notif.isRead = true;
+    this.save();
+    return true;
   }
 
   // --- STATS ---

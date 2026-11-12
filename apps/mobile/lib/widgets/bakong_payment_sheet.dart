@@ -17,27 +17,52 @@ class BakongPaymentSheet extends StatefulWidget {
 }
 
 class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
-  bool isLoading = true;
+  final TextEditingController _phoneCtrl = TextEditingController();
+  final TextEditingController _addressCtrl = TextEditingController();
+  final TextEditingController _noteCtrl = TextEditingController();
+  int _quantity = 1;
+  bool _showShippingForm = true;
+  bool isLoading = false;
   String? errorMessage;
   Map<String, dynamic>? checkoutData;
   Timer? _pollTimer;
   bool isPaid = false;
   Map<String, dynamic>? transactionData;
 
+  double get _totalUsd => widget.product.priceUsd * _quantity;
+
   @override
   void initState() {
     super.initState();
-    _startCheckout();
+    final user = ApiService().currentUser;
+    _phoneCtrl.text = user?.phone ?? '';
+    _addressCtrl.text = user?.location ?? '';
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _phoneCtrl.dispose();
+    _addressCtrl.dispose();
+    _noteCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _startCheckout() async {
+    final phone = _phoneCtrl.text.trim();
+    final addr = _addressCtrl.text.trim();
+    if (phone.isEmpty || addr.isEmpty) {
+      setState(() {
+        errorMessage = tr(
+          'សូមបញ្ចូលលេខទូរស័ព្ទ និងអាសយដ្ឋានដឹកជញ្ជូនជាមុនសិន',
+          'Please enter phone number and delivery address',
+        );
+      });
+      return;
+    }
+
     setState(() {
+      _showShippingForm = false;
       isLoading = true;
       errorMessage = null;
     });
@@ -45,6 +70,10 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
     final res = await ApiService().checkoutProduct(
       productId: widget.product.id,
       currency: 'USD',
+      quantity: _quantity,
+      buyerPhone: phone,
+      shippingAddress: addr,
+      buyerNote: _noteCtrl.text.trim(),
     );
 
     if (mounted) {
@@ -226,7 +255,9 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
 
           // Content
           Expanded(
-            child: isPaid ? _buildSuccessView() : _buildPaymentView(),
+            child: isPaid
+                ? _buildSuccessView()
+                : (_showShippingForm ? _buildShippingFormView() : _buildPaymentView()),
           ),
         ],
       ),
@@ -284,11 +315,13 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
             ),
             child: Column(
               children: [
-                _buildReceiptRow('ទំនិញ:', widget.product.title),
+                _buildReceiptRow('ទំនិញ:', '${widget.product.title} (x$_quantity)'),
                 const SizedBox(height: 8),
                 _buildReceiptRow('វិក្កយបត្រ:', invoice),
                 const SizedBox(height: 8),
-                _buildReceiptRow('ចំនួនទឹកប្រាក់:', '\$${widget.product.priceUsd.toStringAsFixed(2)} USD'),
+                _buildReceiptRow('ចំនួនទឹកប្រាក់:', '\$${_totalUsd.toStringAsFixed(2)} USD'),
+                const SizedBox(height: 8),
+                _buildReceiptRow('ទូរស័ព្ទ / ទីតាំង:', '${_phoneCtrl.text.trim()} • ${_addressCtrl.text.trim()}'),
                 const SizedBox(height: 8),
                 _buildReceiptRow('ស្ថានភាព:', 'PAID (ជោគជ័យ)', isBold: true, valueColor: const Color(0xFF34C759)),
               ],
@@ -301,6 +334,143 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
               borderRadius: BorderRadius.circular(14),
               child: const Text('រួចរាល់ (Done)', style: TextStyle(fontWeight: FontWeight.w700)),
               onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShippingFormView() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.border, width: 0.8),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.product.title,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.primaryText),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '\$${widget.product.priceUsd.toStringAsFixed(2)} USD / ១ ឯកតា',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF007AFF)),
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    CupertinoButton(
+                      padding: const EdgeInsets.all(6),
+                      minSize: 32,
+                      color: AppTheme.fieldBg,
+                      borderRadius: BorderRadius.circular(10),
+                      onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                      child: Icon(CupertinoIcons.minus, size: 16, color: AppTheme.primaryText),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        '$_quantity',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppTheme.primaryText),
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.all(6),
+                      minSize: 32,
+                      color: const Color(0xFF007AFF),
+                      borderRadius: BorderRadius.circular(10),
+                      onPressed: _quantity < 99 ? () => setState(() => _quantity++) : null,
+                      child: const Icon(CupertinoIcons.plus, size: 16, color: CupertinoColors.white),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            tr('លេខទូរស័ព្ទទទួលទំនិញ *', 'Delivery Phone Number *'),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+          ),
+          const SizedBox(height: 6),
+          CupertinoTextField(
+            controller: _phoneCtrl,
+            keyboardType: TextInputType.phone,
+            placeholder: '012 345 678',
+            padding: const EdgeInsets.all(12),
+            style: TextStyle(color: AppTheme.primaryText),
+            decoration: BoxDecoration(
+              color: AppTheme.fieldBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.border, width: 0.6),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            tr('អាសយដ្ឋានដឹកជញ្ជូន *', 'Shipping Address *'),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+          ),
+          const SizedBox(height: 6),
+          CupertinoTextField(
+            controller: _addressCtrl,
+            maxLines: 2,
+            placeholder: tr('ឧ. ផ្ទះលេខ..., ផ្លូវ..., ខណ្ឌ..., ភ្នំពេញ', 'Street, District, City...'),
+            padding: const EdgeInsets.all(12),
+            style: TextStyle(color: AppTheme.primaryText),
+            decoration: BoxDecoration(
+              color: AppTheme.fieldBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.border, width: 0.6),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            tr('កំណត់ចំណាំជូនអ្នកលក់ (ស្រេចចិត្ត)', 'Note to Seller (Optional)'),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+          ),
+          const SizedBox(height: 6),
+          CupertinoTextField(
+            controller: _noteCtrl,
+            placeholder: tr('ឧ. ពណ៌, ទំហំ ឬម៉ោងដឹកជញ្ជូន', 'Color, size, or delivery time...'),
+            padding: const EdgeInsets.all(12),
+            style: TextStyle(color: AppTheme.primaryText),
+            decoration: BoxDecoration(
+              color: AppTheme.fieldBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.border, width: 0.6),
+            ),
+          ),
+          if (errorMessage != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              errorMessage!,
+              style: const TextStyle(color: CupertinoColors.destructiveRed, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ],
+          const SizedBox(height: 20),
+          CupertinoButton(
+            color: const Color(0xFFE1251B),
+            borderRadius: BorderRadius.circular(14),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            onPressed: _startCheckout,
+            child: Text(
+              '${tr("បន្តបង្កើត KHQR បង់ប្រាក់", "Continue to KHQR")} (\$${_totalUsd.toStringAsFixed(2)})',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: CupertinoColors.white),
             ),
           ),
         ],
@@ -451,7 +621,7 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
 
                 const SizedBox(height: 12),
                 Text(
-                  '\$${widget.product.priceUsd.toStringAsFixed(2)} USD',
+                  '\$${_totalUsd.toStringAsFixed(2)} USD',
                   style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w900,
@@ -459,7 +629,7 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
                   ),
                 ),
                 Text(
-                  '~ ${widget.product.priceKhr.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} ៛',
+                  '~ ${(_totalUsd * 4100).round().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} ៛',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,

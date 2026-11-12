@@ -259,9 +259,18 @@ export class FeedService {
     const post = this.db.getPosts().find((p) => p.id === postId);
     if (post && post.authorId !== userId && res?.reacted) {
       const actor = this.db.findUserById(userId);
+      const title = `បានបញ្ចេញប្រតិកម្ម (${reaction})`;
+      this.db.createNotification({
+        userId: post.authorId,
+        actorId: userId,
+        type: 'LIKE',
+        title,
+        body: post.content.substring(0, 80),
+        refId: postId,
+      });
       this.events.emitToUser(post.authorId, {
         type: 'NOTIFICATION',
-        title: `${actor?.name || 'នរណាម្នាក់'} បានបញ្ចេញប្រតិកម្ម (${reaction})`,
+        title: `${actor?.name || 'នរណាម្នាក់'} ${title}`,
         body: post.content.substring(0, 80),
         data: { postId, reaction },
       });
@@ -274,9 +283,18 @@ export class FeedService {
     const author = this.db.findUserById(authorId);
     const post = this.db.getPosts().find((p) => p.id === postId);
     if (post && post.authorId !== authorId) {
+      const title = 'បានបញ្ចេញមតិលើការបង្ហោះរបស់អ្នក';
+      this.db.createNotification({
+        userId: post.authorId,
+        actorId: authorId,
+        type: 'COMMENT',
+        title,
+        body: text.substring(0, 100),
+        refId: postId,
+      });
       this.events.emitToUser(post.authorId, {
         type: 'NOTIFICATION',
-        title: `${author?.name || 'នរណាម្នាក់'} បានបញ្ចេញមតិលើការបង្ហោះរបស់អ្នក`,
+        title: `${author?.name || 'នរណាម្នាក់'} ${title}`,
         body: text.substring(0, 100),
         data: { postId, commentId: comment.id },
       });
@@ -482,6 +500,27 @@ export class FeedService {
 
   getBlockedUsers(blockerId: string) {
     return this.db.getBlockedUsersProfiles(blockerId);
+  }
+
+  getNotifications(userId: string) {
+    return this.db.getNotificationsForUser(userId).map((n) => ({
+      id: n.id,
+      type: n.type,
+      title: n.title,
+      body: n.body,
+      refId: n.refId,
+      isRead: n.isRead,
+      timeAgo: this.formatTimeAgo(n.createdAt),
+      actor: {
+        id: n.actorId,
+        name: n.actorName,
+        avatar: n.actorAvatar || '/default_avatar.svg',
+      },
+    }));
+  }
+
+  markNotificationRead(id: string, userId?: string) {
+    return { success: this.db.markNotificationRead(id, userId) };
   }
 
   createReel(dto: {
