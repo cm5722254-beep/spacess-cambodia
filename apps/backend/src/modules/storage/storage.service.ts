@@ -21,12 +21,24 @@ export interface StoredMediaResult {
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
-  private readonly uploadDir = path.join(__dirname, '..', '..', '..', 'uploads');
+  private readonly uploadDir = process.env.UPLOAD_DIR
+    ? path.resolve(process.env.UPLOAD_DIR)
+    : path.join(__dirname, '..', '..', '..', 'uploads');
 
   constructor() {
     if (!fs.existsSync(this.uploadDir)) {
       fs.mkdirSync(this.uploadDir, { recursive: true });
     }
+  }
+
+  async saveNamedLocalFile(filename: string, buffer: Buffer): Promise<string> {
+    const safeName = path.basename(filename);
+    if (!fs.existsSync(this.uploadDir)) {
+      fs.mkdirSync(this.uploadDir, { recursive: true });
+    }
+    const targetPath = path.join(this.uploadDir, safeName);
+    await fs.promises.writeFile(targetPath, buffer);
+    return `/uploads/${safeName}`;
   }
 
   getR2Config(): R2Config | null {

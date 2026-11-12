@@ -41,8 +41,11 @@ COPY --from=builder /app/apps/backend/package.json ./package.json
 COPY --from=builder /app/apps/backend/node_modules ./node_modules
 COPY --from=builder /app/apps/backend/dist ./dist
 COPY --from=builder /app/apps/backend/prisma ./prisma
+COPY apps/backend/public ./public
+COPY apps/backend/data/admin_avatar.jpg ./data/admin_avatar.jpg
+RUN mkdir -p /data /data/uploads ./uploads
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["node", "dist/main"]
 

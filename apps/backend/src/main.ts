@@ -2,6 +2,9 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
+import * as express from 'express';
+import * as fs from 'fs';
+import * as path from 'path';
 import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
@@ -18,10 +21,28 @@ async function bootstrap() {
   // Security Headers
   app.use(
     helmet({
-      contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+      contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
+
+  // Serve uploaded media and static public assets (fallback when R2 is not used)
+  const uploadDir = process.env.UPLOAD_DIR
+    ? path.resolve(process.env.UPLOAD_DIR)
+    : path.join(process.cwd(), 'uploads');
+  const legacyUploadDir = path.join(process.cwd(), 'uploads');
+  const publicDir = path.join(process.cwd(), 'public');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadDir));
+  if (legacyUploadDir !== uploadDir && fs.existsSync(legacyUploadDir)) {
+    app.use('/uploads', express.static(legacyUploadDir));
+  }
+  if (fs.existsSync(publicDir)) {
+    app.use(express.static(publicDir));
+  }
 
   // Cross-Origin Resource Sharing
   app.enableCors({
@@ -83,7 +104,7 @@ async function bootstrap() {
   });
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(`=======================================================`);
   logger.log(` Spaces Backend running on: http://localhost:${port}/${apiPrefix.replace(/^\//, '')}`);
   logger.log(` Swagger API Docs available on: http://localhost:${port}/api/docs`);

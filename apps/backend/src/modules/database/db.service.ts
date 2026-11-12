@@ -273,12 +273,37 @@ export class DbService implements OnModuleInit {
   };
 
   onModuleInit() {
-    const dataDir = path.resolve(process.cwd(), 'data');
+    const dataDir = process.env.DATA_DIR
+      ? path.resolve(process.env.DATA_DIR)
+      : path.resolve(process.cwd(), 'data');
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
     this.dbPath = path.join(dataDir, 'spaces_db.json');
     this.load();
+  }
+
+  importState(nextState: Partial<DatabaseState>) {
+    this.state = {
+      users: Array.isArray(nextState.users) ? nextState.users : [],
+      posts: Array.isArray(nextState.posts) ? nextState.posts : [],
+      comments: Array.isArray(nextState.comments) ? nextState.comments : [],
+      reactions: Array.isArray(nextState.reactions) ? nextState.reactions : [],
+      savedPosts: Array.isArray(nextState.savedPosts) ? nextState.savedPosts : [],
+      follows: Array.isArray(nextState.follows) ? nextState.follows : [],
+      friendRequests: Array.isArray(nextState.friendRequests) ? nextState.friendRequests : [],
+      products: Array.isArray(nextState.products) ? nextState.products : [],
+      orders: Array.isArray(nextState.orders) ? nextState.orders : [],
+      stories: Array.isArray(nextState.stories) ? nextState.stories : [],
+      streams: Array.isArray(nextState.streams) ? nextState.streams : [],
+      chats: Array.isArray(nextState.chats) ? nextState.chats : [],
+      messages: Array.isArray(nextState.messages) ? nextState.messages : [],
+      reports: Array.isArray(nextState.reports) ? nextState.reports : [],
+      blockedUsers: Array.isArray(nextState.blockedUsers) ? nextState.blockedUsers : [],
+      notifications: Array.isArray(nextState.notifications) ? nextState.notifications : [],
+    };
+    this.save();
+    return this.getStats();
   }
 
   private hashPassword(password: string): string {
