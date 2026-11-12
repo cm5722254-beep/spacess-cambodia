@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
+import '../services/realtime_service.dart';
 import '../services/theme_service.dart';
 import '../services/language_service.dart';
 import '../widgets/liquid_glass.dart';
@@ -16,21 +18,44 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   List<NotificationModel> notifications = [];
   bool isLoading = true;
+  StreamSubscription<Map<String, dynamic>>? _rtSub;
+  String _permStatus = RealtimeService().browserPermissionStatus;
 
   @override
   void initState() {
     super.initState();
     _loadNotifications();
+    _rtSub = RealtimeService().events.listen((evt) {
+      if (!mounted) return;
+      if (evt['type'] != 'SYSTEM') {
+        _loadNotifications();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _rtSub?.cancel();
+    super.dispose();
   }
 
   void _loadNotifications() async {
-    setState(() => isLoading = true);
+    if (notifications.isEmpty) {
+      setState(() => isLoading = true);
+    }
     final fetched = await ApiService().fetchNotifications();
     if (mounted) {
       setState(() {
         notifications = fetched;
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _enableBrowserPush() async {
+    final res = await RealtimeService().requestBrowserNotificationPermission();
+    if (mounted) {
+      setState(() => _permStatus = res);
     }
   }
 
@@ -70,6 +95,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           tr('ការជូនដំណឹង (Notifications)', 'Notifications'),
           style: TextStyle(color: AppTheme.primaryText, fontWeight: FontWeight.w700),
         ),
+        trailing: RealtimeService().browserNotificationsSupported && _permStatus != 'granted'
+            ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: _enableBrowserPush,
+                child: const Icon(CupertinoIcons.bell_fill, size: 20, color: Color(0xFF007AFF)),
+              )
+            : null,
       ),
       child: LiquidGlassAmbientBackground(
         child: SafeArea(

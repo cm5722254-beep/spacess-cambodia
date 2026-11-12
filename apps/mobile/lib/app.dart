@@ -10,6 +10,7 @@ import 'screens/reels_screen.dart';
 import 'widgets/create_post_sheet.dart';
 import 'services/api_service.dart';
 import 'services/language_service.dart';
+import 'services/realtime_service.dart';
 import 'models/user_model.dart';
 import 'widgets/liquid_glass.dart';
 
@@ -273,6 +274,81 @@ class _MainTabScreenState extends State<MainTabScreen> {
                 }
               },
             ),
+          ),
+          // Real-Time SSE In-App Toast Banner
+          ValueListenableBuilder<Map<String, dynamic>?>(
+            valueListenable: RealtimeService().latestToastNotifier,
+            builder: (context, toast, _) {
+              if (toast == null) return const SizedBox.shrink();
+              final type = toast['type']?.toString() ?? 'NOTIFICATION';
+              final title = toast['title']?.toString() ?? '';
+              final body = toast['body']?.toString() ?? '';
+              final icon = type == 'CHAT_MESSAGE'
+                  ? CupertinoIcons.chat_bubble_2_fill
+                  : type == 'ORDER_UPDATE'
+                      ? CupertinoIcons.bag_fill
+                      : CupertinoIcons.bell_fill;
+              final accent = type == 'ORDER_UPDATE'
+                  ? const Color(0xFF34C759)
+                  : const Color(0xFF007AFF);
+
+              return Positioned(
+                top: MediaQuery.of(context).padding.top + 8,
+                left: 14,
+                right: 14,
+                child: GestureDetector(
+                  onTap: () {
+                    RealtimeService().latestToastNotifier.value = null;
+                    if (type == 'CHAT_MESSAGE') {
+                      setState(() => _currentIndex = 3);
+                    }
+                  },
+                  child: LiquidGlassContainer(
+                    borderRadius: 18,
+                    blurSigma: 22,
+                    elevated: true,
+                    borderColor: accent.withValues(alpha: 0.45),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: accent.withValues(alpha: 0.16),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(icon, size: 17, color: accent),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                              ),
+                              if (body.isNotEmpty)
+                                Text(
+                                  body,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 12, color: CupertinoColors.systemGrey),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const Icon(CupertinoIcons.xmark_circle_fill, size: 16, color: CupertinoColors.systemGrey),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),

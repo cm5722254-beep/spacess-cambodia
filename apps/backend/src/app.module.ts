@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { AiModule } from './modules/ai/ai.module';
+import { EventsModule } from './modules/events/events.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { AiModule } from './modules/ai/ai.module';
     }),
     DbModule,
     PrismaModule,
+    EventsModule,
     HealthModule,
     FeedModule,
     AuthModule,

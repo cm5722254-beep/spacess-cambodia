@@ -1606,4 +1606,116 @@ class ApiService {
     }
     return null;
   }
+
+  // --- MARKETPLACE ORDER FULFILLMENT TRACKING ---
+  Future<Map<String, dynamic>?> updateOrderFulfillment({
+    required String orderId,
+    required String fulfillmentStatus,
+    String? trackingNote,
+  }) async {
+    try {
+      final response = await _dio.patch(
+        '/marketplace/orders/$orderId/fulfillment',
+        data: {
+          'userId': currentUser?.id ?? '',
+          'fulfillmentStatus': fulfillmentStatus,
+          if (trackingNote != null) 'trackingNote': trackingNote,
+        },
+      );
+      if (response.statusCode == 200) {
+        final raw = response.data['data'] ?? response.data;
+        if (raw is Map) return Map<String, dynamic>.from(raw);
+      }
+    } catch (e) {
+      debugPrint('Error updating order fulfillment: $e');
+    }
+    return null;
+  }
+
+  // --- SAFETY: REPORT & BLOCK ---
+  Future<bool> reportContent({
+    required String targetType,
+    required String targetId,
+    required String reason,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/reports',
+        data: {
+          'reporterId': currentUser?.id ?? '',
+          'targetType': targetType,
+          'targetId': targetId,
+          'reason': reason,
+        },
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('Error reporting content: $e');
+      return false;
+    }
+  }
+
+  Future<bool> toggleBlockUser(String targetUserId) async {
+    try {
+      final response = await _dio.post(
+        '/users/$targetUserId/block',
+        data: {'blockerId': currentUser?.id ?? ''},
+      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final raw = response.data['data'] ?? response.data;
+        if (raw is Map && raw['isBlocked'] != null) {
+          return raw['isBlocked'] == true;
+        }
+      }
+    } catch (e) {
+      debugPrint('Error toggling block user: $e');
+    }
+    return false;
+  }
+
+  Future<List<Map<String, dynamic>>> fetchBlockedUsers() async {
+    try {
+      final response = await _dio.get(
+        '/users/blocked',
+        queryParameters: {'userId': currentUser?.id ?? ''},
+      );
+      if (response.statusCode == 200) {
+        final raw = response.data['data'] ?? response.data;
+        if (raw is List) {
+          return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching blocked users: $e');
+    }
+    return [];
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAdminReports() async {
+    try {
+      final response = await _dio.get('/auth/admin/reports');
+      if (response.statusCode == 200) {
+        final raw = response.data['data'] ?? response.data;
+        if (raw is List) {
+          return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching admin reports: $e');
+    }
+    return [];
+  }
+
+  Future<bool> resolveAdminReport(String reportId, String action) async {
+    try {
+      final response = await _dio.post(
+        '/auth/admin/reports/$reportId/resolve',
+        data: {'action': action},
+      );
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      debugPrint('Error resolving report: $e');
+      return false;
+    }
+  }
 }

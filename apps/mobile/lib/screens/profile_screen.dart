@@ -5,6 +5,7 @@ import '../models/stream_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/language_service.dart';
+import '../services/realtime_service.dart';
 import '../services/theme_service.dart';
 import '../utils/media_picker_helper.dart';
 import '../widgets/post_card.dart';
@@ -1322,6 +1323,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     Container(height: 0.5, color: AppTheme.divider),
                     CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.bell_fill, color: Color(0xFFFF9500), size: 20),
+                      title: Text(tr('ការជូនដំណឹងលើ Browser (Web Push)', 'Browser Notifications')),
+                      subtitle: Text(
+                        RealtimeService().browserPermissionStatus == 'granted'
+                            ? tr('បានបើកដំណើរការ', 'Enabled')
+                            : tr('ចុចដើម្បីបើកការជូនដំណឹងភ្លាមៗ', 'Tap to enable instant alerts'),
+                      ),
+                      trailing: const Icon(CupertinoIcons.chevron_right, size: 17),
+                      onTap: () async {
+                        final res = await RealtimeService().requestBrowserNotificationPermission();
+                        setSheetState(() {});
+                        if (ctx.mounted && res == 'granted') {
+                          Navigator.pop(ctx);
+                        }
+                      },
+                    ),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
+                      leading: const Icon(CupertinoIcons.person_crop_circle_badge_xmark, color: Color(0xFFFF3B30), size: 20),
+                      title: Text(tr('គណនីដែលបាន Block (Blocked Users)', 'Blocked Users')),
+                      trailing: const Icon(CupertinoIcons.chevron_right, size: 17),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _openBlockedUsersSheet();
+                      },
+                    ),
+                    Container(height: 0.5, color: AppTheme.divider),
+                    CupertinoListTile(
                       leading: const Icon(CupertinoIcons.lock_shield, color: Color(0xFF007AFF), size: 20),
                       title: Text(tr('ប្តូរពាក្យសម្ងាត់ (Change Password)', 'Change Password')),
                       trailing: const Icon(CupertinoIcons.chevron_right, size: 17),
@@ -2407,6 +2436,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
         cancelButton: CupertinoActionSheetAction(
           onPressed: () => Navigator.pop(ctx),
           child: const Text('បិទ'),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openBlockedUsersSheet() async {
+    final blocked = await _api.fetchBlockedUsers();
+    if (!mounted) return;
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => LiquidGlassSheet(
+          initialHeightFraction: 0.6,
+          child: Column(
+            children: [
+              Text(
+                tr('គណនីដែលបាន Block (${blocked.length})', 'Blocked Accounts (${blocked.length})'),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppTheme.primaryText),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: blocked.isEmpty
+                    ? Center(
+                        child: Text(
+                          tr('មិនទាន់មានគណនីដែលបាន Block ទេ', 'No blocked users'),
+                          style: TextStyle(color: AppTheme.secondaryText),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: blocked.length,
+                        separatorBuilder: (_, __) => Container(height: 0.5, color: AppTheme.divider),
+                        itemBuilder: (_, idx) {
+                          final u = blocked[idx];
+                          return CupertinoListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
+                              child: MediaImageView(
+                                url: u['avatar']?.toString() ?? '/default_avatar.svg',
+                                width: 36,
+                                height: 36,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            title: Text(u['name']?.toString() ?? 'User'),
+                            subtitle: Text('@${u['username'] ?? ''}'),
+                            trailing: CupertinoButton(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                              color: const Color(0xFF007AFF),
+                              borderRadius: BorderRadius.circular(10),
+                              onPressed: () async {
+                                await _api.toggleBlockUser(u['id']?.toString() ?? '');
+                                blocked.removeAt(idx);
+                                setModalState(() {});
+                                _loadTabContent();
+                              },
+                              child: Text(
+                                tr('បើកវិញ', 'Unblock'),
+                                style: const TextStyle(fontSize: 12, color: CupertinoColors.white),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
         ),
       ),
     );

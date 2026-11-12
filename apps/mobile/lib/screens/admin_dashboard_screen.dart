@@ -14,6 +14,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _isLoading = true;
   AdminStats? _stats;
   List<UserModel> _users = [];
+  List<Map<String, dynamic>> _reports = [];
   String _searchFilter = '';
 
   @override
@@ -26,15 +27,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     setState(() => _isLoading = true);
     final statsFuture = _api.fetchAdminStats();
     final usersFuture = _api.fetchAdminUsers();
+    final reportsFuture = _api.fetchAdminReports();
 
-    final results = await Future.wait([statsFuture, usersFuture]);
+    final results = await Future.wait([statsFuture, usersFuture, reportsFuture]);
     if (!mounted) return;
 
     setState(() {
       _stats = results[0] as AdminStats?;
       _users = results[1] as List<UserModel>;
+      _reports = List<Map<String, dynamic>>.from(results[2] as List);
       _isLoading = false;
     });
+  }
+
+  Future<void> _resolveReport(String reportId, String action) async {
+    final ok = await _api.resolveAdminReport(reportId, action);
+    if (ok) {
+      await _loadDashboardData();
+    }
   }
 
   Future<void> _toggleBan(UserModel user) async {
@@ -127,6 +137,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           ),
                           const SizedBox(height: 12),
                           if (_stats != null) _buildStatsGrid(_stats!, isDark),
+                          if (_reports.any((r) => r['status'] == 'OPEN')) ...[
+                            const SizedBox(height: 22),
+                            Text(
+                              'របាយការណ៍បំពានរង់ចាំពិនិត្យ (${_reports.where((r) => r['status'] == 'OPEN').length})',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: CupertinoColors.destructiveRed,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ..._reports
+                                .where((r) => r['status'] == 'OPEN')
+                                .map((rep) => _buildReportCard(rep, isDark)),
+                          ],
                           const SizedBox(height: 24),
                           Text(
                             'ការគ្រប់គ្រងគណនីអ្នកប្រើប្រាស់ (${_users.length})',
@@ -359,6 +384,93 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportCard(Map<String, dynamic> rep, bool isDark) {
+    final reportId = rep['id']?.toString() ?? '';
+    final targetType = rep['targetType']?.toString() ?? 'POST';
+    final reason = rep['reason']?.toString() ?? '';
+    final preview = rep['targetPreview']?.toString() ?? '';
+    final reporter = rep['reporterName']?.toString() ?? 'User';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1C1C1E) : CupertinoColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: CupertinoColors.destructiveRed.withOpacity(0.45), width: 0.9),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(CupertinoIcons.exclamationmark_triangle_fill,
+                  size: 16, color: CupertinoColors.destructiveRed),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '$targetType • ដោយ $reporter',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? CupertinoColors.white : CupertinoColors.black,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text('មូលហេតុ: $reason',
+              style: const TextStyle(fontSize: 12, color: CupertinoColors.systemOrange, fontWeight: FontWeight.w600)),
+          if (preview.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(preview,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: CupertinoColors.systemGrey)),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                minSize: 0,
+                color: CupertinoColors.systemGrey.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(8),
+                onPressed: () => _resolveReport(reportId, 'DISMISS'),
+                child: Text(
+                  'មិនអើពើ',
+                  style: TextStyle(fontSize: 11, color: isDark ? CupertinoColors.white : CupertinoColors.black),
+                ),
+              ),
+              if (targetType == 'POST') ...[
+                const SizedBox(width: 6),
+                CupertinoButton(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  minSize: 0,
+                  color: const Color(0xFFFF9500),
+                  borderRadius: BorderRadius.circular(8),
+                  onPressed: () => _resolveReport(reportId, 'DELETE_POST'),
+                  child: const Text('លុប Post', style: TextStyle(fontSize: 11, color: CupertinoColors.white)),
+                ),
+              ],
+              const SizedBox(width: 6),
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                minSize: 0,
+                color: CupertinoColors.destructiveRed,
+                borderRadius: BorderRadius.circular(8),
+                onPressed: () => _resolveReport(reportId, 'BAN_USER'),
+                child: const Text('Ban គណនី', style: TextStyle(fontSize: 11, color: CupertinoColors.white)),
+              ),
+            ],
+          ),
         ],
       ),
     );

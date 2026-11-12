@@ -444,6 +444,56 @@ export class FeedController {
     );
   }
 
+  // --- SAFETY: REPORT & BLOCK ---
+  @Post('reports')
+  @ApiOperation({ summary: 'Submit a report against a post or user' })
+  createReport(
+    @Headers('authorization') authHeader: string,
+    @Body()
+    body: {
+      reporterId?: string;
+      targetType: 'POST' | 'USER';
+      targetId: string;
+      reason: string;
+    },
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, body.reporterId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.feedService.createReport(
+      actingUserId,
+      body.targetType || 'POST',
+      body.targetId,
+      body.reason || 'Inappropriate content',
+    );
+  }
+
+  @Post('users/:id/block')
+  @ApiOperation({ summary: 'Block or unblock a user' })
+  toggleBlockUser(
+    @Param('id') targetUserId: string,
+    @Headers('authorization') authHeader: string,
+    @Body() body: { blockerId?: string },
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, body?.blockerId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.feedService.toggleBlockUser(actingUserId, targetUserId);
+  }
+
+  @Get('users/blocked')
+  @ApiOperation({ summary: 'Get list of users blocked by the current user' })
+  getBlockedUsers(
+    @Headers('authorization') authHeader: string,
+    @Query('userId') userId: string = '',
+  ) {
+    const actingUserId = this.resolveActingUserId(authHeader, userId);
+    if (!actingUserId) return [];
+    return this.feedService.getBlockedUsers(actingUserId);
+  }
+
   @Get('search')
   @ApiOperation({ summary: 'Search posts, spaces, hashtags, and members' })
   @ApiQuery({ name: 'q', required: false })

@@ -244,4 +244,19 @@ export class AuthController {
   getStats() {
     return this.authService.getAdminStats();
   }
+
+  @Get('admin/reports')
+  @ApiOperation({ summary: 'Admin: List all submitted user/post reports' })
+  getReports() {
+    return this.authService.getReportsByAdmin();
+  }
+
+  @Post('admin/reports/:id/resolve')
+  @ApiOperation({ summary: 'Admin: Resolve or dismiss a report' })
+  resolveReport(
+    @Param('id') reportId: string,
+    @Body() body: { action: 'DISMISS' | 'DELETE_POST' | 'BAN_USER' },
+  ) {
+    return this.authService.resolveReportByAdmin(reportId, body.action || 'DISMISS');
+  }
 }

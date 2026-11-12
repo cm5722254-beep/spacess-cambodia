@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import '../models/product_model.dart';
 import '../services/api_service.dart';
 import '../services/language_service.dart';
+import '../services/realtime_service.dart';
 import '../services/theme_service.dart';
 import '../utils/media_picker_helper.dart';
 import '../widgets/bakong_payment_sheet.dart';
@@ -78,6 +80,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     );
   }
 
+  void _openOrdersTrackingSheet() {
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => const _OrdersTrackingSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
@@ -88,20 +97,30 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
           tr('ផ្សារទំនិញ (Marketplace)', 'Spaces Marketplace'),
           style: TextStyle(color: AppTheme.primaryText, fontWeight: FontWeight.w700),
         ),
-        trailing: CupertinoButton(
-          padding: EdgeInsets.zero,
-          onPressed: _openCreateProductSheet,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(CupertinoIcons.plus_circle_fill, size: 20, color: Color(0xFF007AFF)),
-              const SizedBox(width: 4),
-              Text(
-                tr('ដាក់លក់', 'Sell'),
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF007AFF)),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoButton(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              onPressed: _openOrdersTrackingSheet,
+              child: const Icon(CupertinoIcons.cube_box_fill, size: 20, color: Color(0xFF34C759)),
+            ),
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _openCreateProductSheet,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(CupertinoIcons.plus_circle_fill, size: 20, color: Color(0xFF007AFF)),
+                  const SizedBox(width: 4),
+                  Text(
+                    tr('ដាក់លក់', 'Sell'),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Color(0xFF007AFF)),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
       child: SafeArea(
@@ -1321,6 +1340,374 @@ class _CreateProductSheetState extends State<_CreateProductSheet> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OrdersTrackingSheet extends StatefulWidget {
+  const _OrdersTrackingSheet();
+
+  @override
+  State<_OrdersTrackingSheet> createState() => _OrdersTrackingSheetState();
+}
+
+class _OrdersTrackingSheetState extends State<_OrdersTrackingSheet> {
+  int _tab = 0; // 0 = Purchases, 1 = Sales
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _purchases = [];
+  List<Map<String, dynamic>> _sales = [];
+  StreamSubscription<Map<String, dynamic>>? _rtSub;
+
+  static const List<Map<String, String>> _steps = [
+    {'id': 'PROCESSING', 'km': 'កំពុងរៀបចំ', 'en': 'Preparing'},
+    {'id': 'CONFIRMED', 'km': 'បានបញ្ជាក់', 'en': 'Confirmed'},
+    {'id': 'SHIPPING', 'km': 'កំពុងដឹកជញ្ជូន', 'en': 'Shipping'},
+    {'id': 'DELIVERED', 'km': 'បានដល់ដៃ', 'en': 'Delivered'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrders();
+    _rtSub = RealtimeService().events.listen((evt) {
+      if (mounted && evt['type'] == 'ORDER_UPDATE') {
+        _loadOrders();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _rtSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadOrders() async {
+    setState(() => _isLoading = true);
+    final res = await ApiService().fetchUserOrders();
+    if (!mounted) return;
+    setState(() {
+      _purchases = res['purchases'] ?? [];
+      _sales = res['sales'] ?? [];
+      _isLoading = false;
+    });
+  }
+
+  int _stepIndex(String status) {
+    final idx = _steps.indexWhere((s) => s['id'] == status);
+    return idx >= 0 ? idx : 0;
+  }
+
+  Future<void> _updateOrderStatus(Map<String, dynamic> order, String nextStatus) async {
+    final noteCtrl = TextEditingController(text: order['trackingNote']?.toString() ?? '');
+    final confirmed = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(tr('ធ្វើបច្ចុប្បន្នភាពស្ថានភាពដឹកជញ្ជូន', 'Update Delivery Status')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Text(
+              tr('បន្ថែមកំណត់ចំណាំ ឬលេខបុងដឹកជញ្ជូន (ស្រេចចិត្ត)', 'Optional courier or tracking note'),
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            CupertinoTextField(
+              controller: noteCtrl,
+              placeholder: 'ឧ. J&T #KH88291 / កំពុងចេញដំណើរ',
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(tr('បោះបង់', 'Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: Text(tr('រក្សាទុក', 'Update')),
+            onPressed: () => Navigator.pop(ctx, true),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await ApiService().updateOrderFulfillment(
+      orderId: order['id']?.toString() ?? '',
+      fulfillmentStatus: nextStatus,
+      trackingNote: noteCtrl.text.trim(),
+    );
+    await _loadOrders();
+  }
+
+  Future<void> _chatCounterparty(String targetUserId, String productTitle) async {
+    if (targetUserId.isEmpty) return;
+    final rootNav = Navigator.of(context, rootNavigator: true);
+    final chat = await ApiService().getOrCreateDirectChat(targetUserId);
+    if (!mounted || chat == null) return;
+    Navigator.pop(context);
+    rootNav.push(
+      CupertinoPageRoute(
+        builder: (_) => ChatConversationScreen(
+          chat: chat,
+          initialDraft: tr(
+            'សួស្តី! ទាក់ទងនឹងការបញ្ជាទិញ "$productTitle"...',
+            'Hi! Regarding order "$productTitle"...',
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final orders = _tab == 0 ? _purchases : _sales;
+    return LiquidGlassSheet(
+      initialHeightFraction: 0.88,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  tr('ការបញ្ជាទិញ & ដឹកជញ្ជូន', 'Orders & Delivery Tracking'),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppTheme.primaryText),
+                ),
+                CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  onPressed: _loadOrders,
+                  child: const Icon(CupertinoIcons.arrow_clockwise, size: 20),
+                ),
+              ],
+            ),
+          ),
+          CupertinoSlidingSegmentedControl<int>(
+            groupValue: _tab,
+            children: {
+              0: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                child: Text('${tr("ការទិញ", "Purchases")} (${_purchases.length})'),
+              ),
+              1: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                child: Text('${tr("ការលក់", "Sales")} (${_sales.length})'),
+              ),
+            },
+            onValueChanged: (val) {
+              if (val != null) setState(() => _tab = val);
+            },
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CupertinoActivityIndicator())
+                : orders.isEmpty
+                    ? Center(
+                        child: Text(
+                          tr('មិនទាន់មានការបញ្ជាទិញនៅឡើយទេ', 'No orders yet'),
+                          style: TextStyle(color: AppTheme.secondaryText),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: orders.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (_, idx) => _buildOrderCard(orders[idx]),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(Map<String, dynamic> order) {
+    final title = order['productTitle']?.toString() ?? '';
+    final amount = order['amount']?.toString() ?? '0';
+    final currency = order['currency']?.toString() ?? 'USD';
+    final payStatus = order['status']?.toString() ?? 'PENDING';
+    final fulStatus = order['fulfillmentStatus']?.toString() ?? 'PROCESSING';
+    final note = order['trackingNote']?.toString() ?? '';
+    final activeStep = _stepIndex(fulStatus);
+    final isSale = _tab == 1;
+    final counterpartyId = isSale
+        ? (order['buyerId']?.toString() ?? '')
+        : (order['sellerId']?.toString() ?? '');
+    final counterpartyName = isSale
+        ? (order['buyerName']?.toString() ?? 'Buyer')
+        : (order['sellerStoreName']?.toString() ?? order['sellerName']?.toString() ?? 'Seller');
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.border, width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.primaryText),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (payStatus == 'PAID' ? const Color(0xFF34C759) : const Color(0xFFFF9500))
+                      .withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  payStatus == 'PAID' ? 'PAID KHQR' : payStatus,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: payStatus == 'PAID' ? const Color(0xFF34C759) : const Color(0xFFFF9500),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '$amount $currency • ${isSale ? tr("អតិថិជន", "Buyer") : tr("អ្នកលក់", "Seller")}: $counterpartyName',
+            style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+          ),
+          const SizedBox(height: 12),
+          // 4-step Delivery Stepper
+          Row(
+            children: List.generate(_steps.length, (i) {
+              final reached = i <= activeStep;
+              return Expanded(
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        if (i > 0)
+                          Expanded(
+                            child: Container(
+                              height: 2,
+                              color: reached ? const Color(0xFF007AFF) : AppTheme.border,
+                            ),
+                          ),
+                        Container(
+                          width: 18,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: reached ? const Color(0xFF007AFF) : AppTheme.fieldBg,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: reached ? const Color(0xFF007AFF) : AppTheme.border,
+                            ),
+                          ),
+                          child: Icon(
+                            CupertinoIcons.checkmark,
+                            size: 11,
+                            color: reached ? CupertinoColors.white : AppTheme.tertiaryText,
+                          ),
+                        ),
+                        if (i < _steps.length - 1)
+                          Expanded(
+                            child: Container(
+                              height: 2,
+                              color: (i + 1 <= activeStep) ? const Color(0xFF007AFF) : AppTheme.border,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      tr(_steps[i]['km']!, _steps[i]['en']!),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: reached ? FontWeight.w700 : FontWeight.w500,
+                        color: reached ? AppTheme.primaryText : AppTheme.secondaryText,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF007AFF).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '📦 $note',
+                style: TextStyle(fontSize: 12, color: AppTheme.primaryText, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                minSize: 0,
+                color: AppTheme.fieldBg,
+                borderRadius: BorderRadius.circular(10),
+                onPressed: () => _chatCounterparty(counterpartyId, title),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(CupertinoIcons.chat_bubble_fill, size: 14, color: Color(0xFF007AFF)),
+                    const SizedBox(width: 5),
+                    Text(
+                      tr('ឆាត', 'Chat'),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF007AFF)),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              if (isSale && fulStatus != 'DELIVERED') ...[
+                if (fulStatus == 'PROCESSING')
+                  _statusActionBtn('បញ្ជាក់', 'CONFIRMED', order),
+                if (fulStatus == 'CONFIRMED' || fulStatus == 'PROCESSING') ...[
+                  const SizedBox(width: 6),
+                  _statusActionBtn('ដឹកជញ្ជូន', 'SHIPPING', order),
+                ],
+                const SizedBox(width: 6),
+                _statusActionBtn('ដល់ដៃ', 'DELIVERED', order, isPrimary: true),
+              ] else if (!isSale && fulStatus == 'SHIPPING') ...[
+                _statusActionBtn(tr('បានទទួលទំនិញ', 'Mark Received'), 'DELIVERED', order, isPrimary: true),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusActionBtn(
+    String label,
+    String targetStatus,
+    Map<String, dynamic> order, {
+    bool isPrimary = false,
+  }) {
+    return CupertinoButton(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      minSize: 0,
+      color: isPrimary ? const Color(0xFF34C759) : const Color(0xFF007AFF),
+      borderRadius: BorderRadius.circular(10),
+      onPressed: () => _updateOrderStatus(order, targetStatus),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: CupertinoColors.white),
       ),
     );
   }

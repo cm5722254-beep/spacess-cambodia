@@ -4,6 +4,7 @@ import '../models/post_model.dart';
 import '../models/user_model.dart';
 import '../services/api_service.dart';
 import '../services/language_service.dart';
+import '../services/realtime_service.dart';
 import '../services/theme_service.dart';
 import '../utils/media_picker_helper.dart';
 import '../utils/voice_recorder_helper.dart';
@@ -23,6 +24,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _searchDebounce;
   Timer? _pollTimer;
+  StreamSubscription<Map<String, dynamic>>? _rtSub;
 
   List<ChatConversationModel> _chats = [];
   List<PublicUserModel> _friends = [];
@@ -38,8 +40,15 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _loadAll(showLoader: true);
-    _pollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted && _searchQuery.isEmpty) {
+        _loadAll(showLoader: false);
+      }
+    });
+    _rtSub = RealtimeService().events.listen((evt) {
+      if (!mounted) return;
+      final type = evt['type']?.toString();
+      if (type == 'CHAT_MESSAGE' || type == 'NOTIFICATION') {
         _loadAll(showLoader: false);
       }
     });
@@ -47,6 +56,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _rtSub?.cancel();
     _searchDebounce?.cancel();
     _pollTimer?.cancel();
     _searchCtrl.dispose();
@@ -1220,6 +1230,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
   int _recordSeconds = 0;
   Timer? _recordTimer;
   Timer? _pollTimer;
+  StreamSubscription<Map<String, dynamic>>? _rtSub;
 
   @override
   void initState() {
@@ -1228,13 +1239,23 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       _msgController.text = widget.initialDraft!;
     }
     _loadMessages(scrollBottom: true);
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 6), (_) {
       if (mounted) _loadMessages(scrollBottom: false);
+    });
+    _rtSub = RealtimeService().events.listen((evt) {
+      if (!mounted) return;
+      if (evt['type']?.toString() == 'CHAT_MESSAGE') {
+        final chatId = evt['data']?['chatId']?.toString();
+        if (chatId == widget.chat.id) {
+          _loadMessages(scrollBottom: true);
+        }
+      }
     });
   }
 
   @override
   void dispose() {
+    _rtSub?.cancel();
     _pollTimer?.cancel();
     _recordTimer?.cancel();
     if (_isRecordingVoice) {

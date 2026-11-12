@@ -120,8 +120,28 @@ export interface OrderEntity {
   qrImage?: string;
   deeplink?: string;
   status: 'PENDING' | 'PAID' | 'FAILED';
+  fulfillmentStatus?: 'PROCESSING' | 'CONFIRMED' | 'SHIPPING' | 'DELIVERED';
+  trackingNote?: string;
   transactionData?: any;
   paidAt?: string;
+  updatedAt?: string;
+  createdAt: string;
+}
+
+export interface ReportEntity {
+  id: string;
+  reporterId: string;
+  targetType: 'POST' | 'USER';
+  targetId: string;
+  reason: string;
+  status: 'OPEN' | 'RESOLVED' | 'DISMISSED';
+  createdAt: string;
+  resolvedAt?: string;
+}
+
+export interface BlockEntity {
+  blockerId: string;
+  blockedId: string;
   createdAt: string;
 }
 
@@ -206,6 +226,8 @@ export interface DatabaseState {
   streams: StreamEntity[];
   chats: ChatEntity[];
   messages: MessageEntity[];
+  reports?: ReportEntity[];
+  blockedUsers?: BlockEntity[];
 }
 
 @Injectable()
@@ -225,6 +247,8 @@ export class DbService implements OnModuleInit {
     streams: [],
     chats: [],
     messages: [],
+    reports: [],
+    blockedUsers: [],
   };
 
   onModuleInit() {
@@ -252,6 +276,8 @@ export class DbService implements OnModuleInit {
         if (!this.state.friendRequests) this.state.friendRequests = [];
         if (!this.state.chats) this.state.chats = [];
         if (!this.state.messages) this.state.messages = [];
+        if (!this.state.reports) this.state.reports = [];
+        if (!this.state.blockedUsers) this.state.blockedUsers = [];
         console.log(`[DbService] Database loaded from ${this.dbPath} (Users: ${this.state.users.length}, Posts: ${this.state.posts.length})`);
         return;
       } catch (err) {
@@ -960,10 +986,36 @@ export class DbService implements OnModuleInit {
       id: `ord-${Date.now()}`,
       ...orderData,
       status: 'PENDING',
+      fulfillmentStatus: 'PROCESSING',
       createdAt: new Date().toISOString(),
     };
     if (!this.state.orders) this.state.orders = [];
     this.state.orders.unshift(order);
+    this.save();
+    return order;
+  }
+
+  updateOrderFulfillment(
+    orderId: string,
+    actingUserId: string,
+    fulfillmentStatus: 'PROCESSING' | 'CONFIRMED' | 'SHIPPING' | 'DELIVERED',
+    trackingNote?: string,
+  ): OrderEntity | null {
+    if (!this.state.orders) return null;
+    const order = this.state.orders.find((o) => o.id === orderId);
+    if (!order) return null;
+    const acting = this.findUserById(actingUserId);
+    const isAdmin = acting?.role === 'ADMIN';
+    // Seller updates processing/confirmed/shipping/delivered; buyer can confirm delivery too
+    const canSeller = order.sellerId === actingUserId;
+    const canBuyerDeliver = order.buyerId === actingUserId && fulfillmentStatus === 'DELIVERED';
+    if (!canSeller && !canBuyerDeliver && !isAdmin) return null;
+
+    order.fulfillmentStatus = fulfillmentStatus;
+    if (trackingNote !== undefined) {
+      order.trackingNote = trackingNote.trim();
+    }
+    order.updatedAt = new Date().toISOString();
     this.save();
     return order;
   }
@@ -1247,6 +1299,10 @@ export class DbService implements OnModuleInit {
     return this.state.messages.filter((m) => m.chatId === chatId);
   }
 
+  getChatById(chatId: string): ChatEntity | undefined {
+    return this.state.chats.find((c) => c.id === chatId);
+  }
+
   sendMessage(
     chatId: string,
     senderId: string,
@@ -1488,6 +1544,133 @@ export class DbService implements OnModuleInit {
 
     this.save();
     return stream;
+  }
+
+  // --- BLOCKING & MODERATION REPORTS ---
+  getBlockedUserIds(blockerId: string): string[] {
+    if (!this.state.blockedUsers) return [];
+    return this.state.blockedUsers
+      .filter((b) => b.blockerId === blockerId)
+      .map((b) => b.blockedId);
+  }
+
+  isBlockedBetween(u1: string, u2: string): boolean {
+    if (!this.state.blockedUsers) return false;
+    return this.state.blockedUsers.some(
+      (b) => (b.blockerId === u1 && b.blockedId === u2) || (b.blockerId === u2 && b.blockedId === u1),
+    );
+  }
+
+  toggleBlockUser(blockerId: string, blockedId: string): { isBlocked: boolean } {
+    if (!blockerId || !blockedId || blockerId === blockedId) {
+      return { isBlocked: false };
+    }
+    if (!this.state.blockedUsers) this.state.blockedUsers = [];
+    const idx = this.state.blockedUsers.findIndex(
+      (b) => b.blockerId === blockerId && b.blockedId === blockedId,
+    );
+    if (idx >= 0) {
+      this.state.blockedUsers.splice(idx, 1);
+      this.save();
+      return { isBlocked: false };
+    }
+    this.state.blockedUsers.push({
+      blockerId,
+      blockedId,
+      createdAt: new Date().toISOString(),
+    });
+    this.save();
+    return { isBlocked: true };
+  }
+
+  getBlockedUsersProfiles(blockerId: string) {
+    const ids = this.getBlockedUserIds(blockerId);
+    return ids
+      .map((id) => this.findUserById(id))
+      .filter((u): u is UserEntity => !!u)
+      .map((u) => ({
+        id: u.id,
+        name: u.name,
+        username: u.username,
+        avatar: u.avatar || '/default_avatar.svg',
+      }));
+  }
+
+  createReport(
+    reporterId: string,
+    targetType: 'POST' | 'USER',
+    targetId: string,
+    reason: string,
+  ): ReportEntity {
+    if (!this.state.reports) this.state.reports = [];
+    const report: ReportEntity = {
+      id: `rep-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      reporterId,
+      targetType,
+      targetId,
+      reason: (reason || 'Inappropriate content').trim(),
+      status: 'OPEN',
+      createdAt: new Date().toISOString(),
+    };
+    this.state.reports.unshift(report);
+    this.save();
+    return report;
+  }
+
+  getReports() {
+    if (!this.state.reports) return [];
+    return this.state.reports.map((r) => {
+      const reporter = this.findUserById(r.reporterId);
+      let targetPreview = '';
+      let targetAuthorId = '';
+      if (r.targetType === 'POST') {
+        const post = this.state.posts.find((p) => p.id === r.targetId);
+        targetPreview = post ? post.content.substring(0, 120) : '[Post deleted]';
+        targetAuthorId = post?.authorId || '';
+      } else {
+        const u = this.findUserById(r.targetId);
+        targetPreview = u ? `${u.name} (@${u.username})` : '[User not found]';
+        targetAuthorId = r.targetId;
+      }
+      return {
+        ...r,
+        reporterName: reporter?.name || 'User',
+        targetPreview,
+        targetAuthorId,
+      };
+    });
+  }
+
+  resolveReport(
+    reportId: string,
+    action: 'DISMISS' | 'DELETE_POST' | 'BAN_USER',
+  ): { success: boolean; report?: ReportEntity } {
+    if (!this.state.reports) return { success: false };
+    const report = this.state.reports.find((r) => r.id === reportId);
+    if (!report) return { success: false };
+
+    if (action === 'DELETE_POST' && report.targetType === 'POST') {
+      this.state.posts = this.state.posts.filter((p) => p.id !== report.targetId);
+      report.status = 'RESOLVED';
+    } else if (action === 'BAN_USER') {
+      const targetUserId =
+        report.targetType === 'USER'
+          ? report.targetId
+          : this.state.posts.find((p) => p.id === report.targetId)?.authorId;
+      if (targetUserId) {
+        const targetUser = this.findUserById(targetUserId);
+        if (targetUser && targetUser.role !== 'ADMIN') {
+          targetUser.isBanned = true;
+        }
+      }
+      report.status = 'RESOLVED';
+    } else {
+      report.status = 'DISMISSED';
+    }
+
+    report.resolvedAt = new Date().toISOString();
+    this.save();
+    return { success: true, report };
   }
 
   // --- STATS ---

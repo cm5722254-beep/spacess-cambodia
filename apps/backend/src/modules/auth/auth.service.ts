@@ -519,6 +519,14 @@ export class AuthService {
     return this.db.getStats();
   }
 
+  getReportsByAdmin() {
+    return this.db.getReports();
+  }
+
+  resolveReportByAdmin(reportId: string, action: 'DISMISS' | 'DELETE_POST' | 'BAN_USER') {
+    return this.db.resolveReport(reportId, action);
+  }
+
   private toSafeUser(user: UserEntity) {
     return {
       id: user.id,

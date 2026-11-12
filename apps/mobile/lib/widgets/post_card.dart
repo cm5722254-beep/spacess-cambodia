@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import '../models/post_model.dart';
 import '../services/api_service.dart';
 import '../services/language_service.dart';
@@ -158,6 +159,91 @@ class _PostCardState extends State<PostCard> {
     );
   }
 
+  void _openReportPostDialog() {
+    final reasons = [
+      'ព័ត៌មានមិនពិត (Misinformation)',
+      'សាររំខាន / ផ្សាយពាណិជ្ជកម្ម (Spam)',
+      'ខ្លឹមសារមិនសមរម្យ / អាសអាភាស',
+      'ការបោកប្រាស់ / លួចបន្លំ (Scam)',
+    ];
+    showCupertinoModalPopup(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: Text(tr('ជ្រើសរើសមូលហេតុរាយការណ៍', 'Select Report Reason')),
+        message: Text(tr('ក្រុមការងារ Admin នឹងពិនិត្យរបាយការណ៍នេះជាបន្ទាន់។', 'Admin will review this report shortly.')),
+        actions: reasons
+            .map(
+              (r) => CupertinoActionSheetAction(
+                child: Text(r),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final ok = await ApiService().reportContent(
+                    targetType: 'POST',
+                    targetId: widget.post.id,
+                    reason: r,
+                  );
+                  if (!mounted) return;
+                  showCupertinoDialog(
+                    context: context,
+                    builder: (dCtx) => CupertinoAlertDialog(
+                      title: Text(ok ? tr('បានផ្ញើរបាយការណ៍', 'Report Submitted') : tr('មានបញ្ហា', 'Error')),
+                      content: Text(
+                        ok
+                            ? tr('អរគុណ! របាយការណ៍របស់អ្នកត្រូវបានផ្ញើទៅ Admin រួចរាល់។', 'Thank you! Your report has been sent to Admin.')
+                            : tr('មិនអាចផ្ញើរបាយការណ៍បានទេ។', 'Failed to send report.'),
+                      ),
+                      actions: [
+                        CupertinoDialogAction(
+                          child: const Text('យល់ព្រម'),
+                          onPressed: () => Navigator.pop(dCtx),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            )
+            .toList(),
+        cancelButton: CupertinoActionSheetAction(
+          child: Text(tr('បោះបង់', 'Cancel')),
+          onPressed: () => Navigator.pop(ctx),
+        ),
+      ),
+    );
+  }
+
+  void _confirmBlockUser() {
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: Text(tr('បិទខ្ទប់អ្នកប្រើប្រាស់', 'Block User')),
+        content: Text(
+          tr(
+            'តើអ្នកចង់បិទខ្ទប់ ${widget.post.author.name} មែនទេ? អ្នកនឹងលែងឃើញការបង្ហោះពីគាត់ទៀតហើយ។',
+            'Block ${widget.post.author.name}? You will no longer see posts from this account.',
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: Text(tr('បោះបង់', 'Cancel')),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            child: Text(tr('បិទខ្ទប់ (Block)', 'Block')),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final blocked = await ApiService().toggleBlockUser(widget.post.author.id);
+              if (blocked && widget.onPostDeleted != null) {
+                widget.onPostDeleted!();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openPostOptions() {
     final currentUserId = ApiService().currentUser?.id;
     final isAuthor = currentUserId == widget.post.author.id;
@@ -170,7 +256,26 @@ class _PostCardState extends State<PostCard> {
         actions: [
           CupertinoActionSheetAction(
             child: Text(tr('ចម្លងតំណភ្ជាប់ (Copy Link)', 'Copy Link')),
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await Clipboard.setData(
+                ClipboardData(text: 'https://spaces-cambodia.vercel.app/?post=${widget.post.id}'),
+              );
+              if (!mounted) return;
+              showCupertinoDialog(
+                context: context,
+                builder: (dCtx) => CupertinoAlertDialog(
+                  title: Text(tr('បានចម្លងតំណភ្ជាប់', 'Link Copied')),
+                  content: Text(tr('តំណភ្ជាប់ការបង្ហោះត្រូវបានចម្លងរួចរាល់។', 'Post link copied to clipboard.')),
+                  actions: [
+                    CupertinoDialogAction(
+                      child: const Text('យល់ព្រម'),
+                      onPressed: () => Navigator.pop(dCtx),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
           if (isAuthor || isAdmin) ...[
             CupertinoActionSheetAction(
@@ -192,7 +297,18 @@ class _PostCardState extends State<PostCard> {
             CupertinoActionSheetAction(
               isDestructiveAction: true,
               child: Text(tr('រាយការណ៍ការបង្ហោះ (Report)', 'Report Post')),
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openReportPostDialog();
+              },
+            ),
+            CupertinoActionSheetAction(
+              isDestructiveAction: true,
+              child: Text(tr('បិទខ្ទប់ ${widget.post.author.name} (Block)', 'Block User')),
+              onPressed: () {
+                Navigator.pop(ctx);
+                _confirmBlockUser();
+              },
             ),
           ],
         ],

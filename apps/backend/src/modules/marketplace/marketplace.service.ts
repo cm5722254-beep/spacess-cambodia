@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { DbService, ProductEntity, OrderEntity } from '../database/db.service';
+import { EventsService } from '../events/events.service';
 
 export interface ProductItem extends ProductEntity {
   sellerName: string;
@@ -15,7 +16,10 @@ export interface ProductItem extends ProductEntity {
 export class MarketplaceService {
   private readonly GATEWAY_URL = 'https://lorndavid.online';
 
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly events: EventsService,
+  ) {}
 
   getCategories() {
     return [
@@ -205,6 +209,14 @@ export class MarketplaceService {
       if (status.responseCode === 0) {
         // Payment verified & settled on NBC ledger!
         const updated = this.db.updateOrderStatus(md5, 'PAID', status.data);
+        if (updated) {
+          this.events.emitToUsers([updated.buyerId, updated.sellerId], {
+            type: 'ORDER_UPDATE',
+            title: 'ការទូទាត់ Bakong KHQR ជោគជ័យ',
+            body: `${updated.productTitle} (\$${updated.amount})`,
+            data: { orderId: updated.id, status: 'PAID' },
+          });
+        }
         return {
           success: true,
           paid: true,
@@ -230,5 +242,34 @@ export class MarketplaceService {
 
   getUserOrders(userId: string) {
     return this.db.getUserOrders(userId);
+  }
+
+  updateOrderFulfillment(
+    orderId: string,
+    actingUserId: string,
+    fulfillmentStatus: 'PROCESSING' | 'CONFIRMED' | 'SHIPPING' | 'DELIVERED',
+    trackingNote?: string,
+  ) {
+    const updated = this.db.updateOrderFulfillment(orderId, actingUserId, fulfillmentStatus, trackingNote);
+    if (!updated) {
+      throw new ForbiddenException('Not allowed to update this order or order not found');
+    }
+    const statusLabels: Record<string, string> = {
+      PROCESSING: 'កំពុងរៀបចំទំនិញ',
+      CONFIRMED: 'អ្នកលក់បានបញ្ជាក់ការកម្ម៉ង់',
+      SHIPPING: 'កំពុងដឹកជញ្ជូនដល់លោកអ្នក',
+      DELIVERED: 'ទំនិញត្រូវបានប្រគល់ជូនរួចរាល់',
+    };
+    this.events.emitToUsers([updated.buyerId, updated.sellerId], {
+      type: 'ORDER_UPDATE',
+      title: `បច្ចុប្បន្នភាពការដឹកជញ្ជូន: ${statusLabels[fulfillmentStatus] || fulfillmentStatus}`,
+      body: `${updated.productTitle}${updated.trackingNote ? ` • ${updated.trackingNote}` : ''}`,
+      data: {
+        orderId: updated.id,
+        fulfillmentStatus,
+        trackingNote: updated.trackingNote || '',
+      },
+    });
+    return { success: true, order: updated };
   }
 }

@@ -1,18 +1,18 @@
-import { Controller, Get, Post, Delete, Body, Param, Query, Headers, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Headers, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { MarketplaceService } from './marketplace.service';
 
 @ApiTags('Marketplace & E-Commerce')
 @Controller('marketplace')
 export class MarketplaceController {
-  constructor(private readonly marketplaceService: MarketplaceService) {}
+  constructor(private readonly marketplaceService: MarketplaceService) { }
 
   private resolveUserId(authHeader?: string, fallbackId?: string): string {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       try {
         const decoded = JSON.parse(Buffer.from(authHeader.replace('Bearer ', ''), 'base64').toString('utf8'));
         if (decoded && decoded.userId) return decoded.userId;
-      } catch (e) {}
+      } catch (e) { }
     }
     return (fallbackId || '').trim();
   }
@@ -91,5 +91,29 @@ export class MarketplaceController {
   @ApiOperation({ summary: 'Get purchases and sales orders for user' })
   getUserOrders(@Param('userId') userId: string) {
     return this.marketplaceService.getUserOrders(userId);
+  }
+
+  @Patch('orders/:id/fulfillment')
+  @ApiOperation({ summary: 'Update order delivery fulfillment status and tracking note' })
+  updateOrderFulfillment(
+    @Param('id') orderId: string,
+    @Headers('authorization') authHeader: string,
+    @Body()
+    body: {
+      userId?: string;
+      fulfillmentStatus: 'PROCESSING' | 'CONFIRMED' | 'SHIPPING' | 'DELIVERED';
+      trackingNote?: string;
+    },
+  ) {
+    const actingUserId = this.resolveUserId(authHeader, body.userId);
+    if (!actingUserId) {
+      throw new ForbiddenException('Authentication required');
+    }
+    return this.marketplaceService.updateOrderFulfillment(
+      orderId,
+      actingUserId,
+      body.fulfillmentStatus,
+      body.trackingNote,
+    );
   }
 }

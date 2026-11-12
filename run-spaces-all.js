@@ -81,6 +81,12 @@ const server = http.createServer((req, res) => {
 
   // Reverse Proxy for API endpoints: Forward /api/* to Backend on Port 3000
   if (req.url.startsWith('/api/') || req.url.startsWith('/api')) {
+    const isSse = req.url.includes('/events/stream');
+    if (isSse) {
+      req.setTimeout(0);
+      res.setTimeout(0);
+      res.setHeader('X-Accel-Buffering', 'no');
+    }
     const proxyReq = http.request(
       {
         host: 'localhost',
@@ -97,6 +103,9 @@ const server = http.createServer((req, res) => {
         proxyRes.pipe(res, { end: true });
       }
     );
+    if (isSse) {
+      proxyReq.setTimeout(0);
+    }
 
     proxyReq.on('error', (err) => {
       console.error('API Proxy error:', err.message);

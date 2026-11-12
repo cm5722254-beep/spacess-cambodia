@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DbService, PostEntity, UserEntity } from '../database/db.service';
+import { EventsService } from '../events/events.service';
 
 export interface Author {
   id: string;
@@ -68,7 +69,10 @@ export interface SpaceItem {
 
 @Injectable()
 export class FeedService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly events: EventsService,
+  ) {}
 
   private spaces: SpaceItem[] = [
     {
@@ -189,12 +193,18 @@ export class FeedService {
     savedByUserId?: string;
     currentUserId?: string;
   }) {
-    const rawPosts = this.db.getPosts({
-      spaceId: params?.spaceId,
-      city: params?.city,
-      authorId: params?.authorId,
-      savedByUserId: params?.savedByUserId,
-    });
+    const blockedSet = params?.currentUserId
+      ? new Set(this.db.getBlockedUserIds(params.currentUserId))
+      : new Set<string>();
+
+    const rawPosts = this.db
+      .getPosts({
+        spaceId: params?.spaceId,
+        city: params?.city,
+        authorId: params?.authorId,
+        savedByUserId: params?.savedByUserId,
+      })
+      .filter((p) => !blockedSet.has(p.authorId));
 
     const posts = rawPosts.map((p) => this.toPostItem(p, params?.currentUserId));
 
@@ -245,12 +255,32 @@ export class FeedService {
   }
 
   toggleReaction(postId: string, userId: string, reaction: string) {
-    return this.db.toggleReaction(postId, userId, reaction);
+    const res = this.db.toggleReaction(postId, userId, reaction);
+    const post = this.db.getPosts().find((p) => p.id === postId);
+    if (post && post.authorId !== userId && res?.reacted) {
+      const actor = this.db.findUserById(userId);
+      this.events.emitToUser(post.authorId, {
+        type: 'NOTIFICATION',
+        title: `${actor?.name || 'នរណាម្នាក់'} បានបញ្ចេញប្រតិកម្ម (${reaction})`,
+        body: post.content.substring(0, 80),
+        data: { postId, reaction },
+      });
+    }
+    return res;
   }
 
   addComment(postId: string, authorId: string, text: string, parentId?: string) {
     const comment = this.db.addComment(postId, authorId, text, parentId);
     const author = this.db.findUserById(authorId);
+    const post = this.db.getPosts().find((p) => p.id === postId);
+    if (post && post.authorId !== authorId) {
+      this.events.emitToUser(post.authorId, {
+        type: 'NOTIFICATION',
+        title: `${author?.name || 'នរណាម្នាក់'} បានបញ្ចេញមតិលើការបង្ហោះរបស់អ្នក`,
+        body: text.substring(0, 100),
+        data: { postId, commentId: comment.id },
+      });
+    }
     return {
       id: comment.id,
       author: author?.name || 'អ្នកប្រើប្រាស់',
@@ -279,11 +309,28 @@ export class FeedService {
   sendFriendRequest(requesterId: string, receiverId: string) {
     const req = this.db.sendFriendRequest(requesterId, receiverId);
     if (!req) return { success: false, message: 'សំណើមិនត្រឹមត្រូវ' };
+    const sender = this.db.findUserById(requesterId);
+    this.events.emitToUser(receiverId, {
+      type: 'NOTIFICATION',
+      title: 'សំណើសុំធ្វើមិត្តថ្មី',
+      body: `${sender?.name || 'អ្នកប្រើប្រាស់'} ចង់ភ្ជាប់ទំនាក់ទំនងជាមួយអ្នក`,
+      data: { requesterId },
+    });
     return { success: true, request: req };
   }
 
   respondFriendRequest(requestId: string, userId: string, accept: boolean) {
-    return this.db.respondFriendRequest(requestId, userId, accept);
+    const res = this.db.respondFriendRequest(requestId, userId, accept);
+    if (accept && res?.request?.requesterId) {
+      const accepter = this.db.findUserById(userId);
+      this.events.emitToUser(res.request.requesterId, {
+        type: 'NOTIFICATION',
+        title: 'សំណើធ្វើមិត្តត្រូវបានយល់ព្រម',
+        body: `${accepter?.name || 'មិត្តភក្តិ'} បានយល់ព្រមជាមិត្តរបស់អ្នកហើយ`,
+        data: { userId },
+      });
+    }
+    return res;
   }
 
   removeFriend(userId1: string, userId2: string) {
@@ -376,7 +423,8 @@ export class FeedService {
     const sender = this.db.findUserById(senderId);
     const sName = sender?.name || 'User';
     const sAvatar = sender?.avatar || '/default_avatar.svg';
-    return {
+
+    const payloadMsg = {
       id: msg.id,
       chatId: msg.chatId,
       senderId: msg.senderId,
@@ -388,14 +436,52 @@ export class FeedService {
       mediaType: msg.mediaType || 'text',
       durationSec: msg.durationSec || 0,
       timeAgo: 'ឥឡូវនេះ',
-      isMe: true,
+      isMe: false,
       createdAt: msg.createdAt,
+    };
+
+    const chat = this.db.getChatById(chatId);
+    if (chat) {
+      const recipients = chat.participantIds.filter((id) => id !== senderId);
+      const preview =
+        msg.text ||
+        (msg.mediaType === 'voice'
+          ? '🎤 សារសំឡេងថ្មី'
+          : msg.mediaType === 'video'
+            ? '🎬 វីដេអូថ្មី'
+            : '📷 រូបភាពថ្មី');
+      this.events.emitToUsers(recipients, {
+        type: 'CHAT_MESSAGE',
+        title: `សារថ្មីពី ${sName}`,
+        body: preview,
+        data: { chatId, message: payloadMsg },
+      });
+    }
+
+    return {
+      ...payloadMsg,
+      isMe: true,
     };
   }
 
   getReels(currentUserId?: string) {
-    const raw = this.db.getReels();
+    const blockedSet = currentUserId
+      ? new Set(this.db.getBlockedUserIds(currentUserId))
+      : new Set<string>();
+    const raw = this.db.getReels().filter((p) => !blockedSet.has(p.authorId));
     return raw.map((p) => this.toPostItem(p, currentUserId));
+  }
+
+  createReport(reporterId: string, targetType: 'POST' | 'USER', targetId: string, reason: string) {
+    return this.db.createReport(reporterId, targetType, targetId, reason);
+  }
+
+  toggleBlockUser(blockerId: string, blockedId: string) {
+    return this.db.toggleBlockUser(blockerId, blockedId);
+  }
+
+  getBlockedUsers(blockerId: string) {
+    return this.db.getBlockedUsersProfiles(blockerId);
   }
 
   createReel(dto: {
