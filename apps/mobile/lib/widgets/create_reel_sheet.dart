@@ -85,15 +85,35 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pickVideoFromDevice();
+    });
+  }
+
+  @override
   void dispose() {
     _captionCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _pickVideoFromDevice() async {
-    setState(() => _isUploading = true);
+  Future<void> _pickVideoFromDevice({bool captureCamera = false}) async {
+    if (_isUploading) return;
+    setState(() {
+      _isUploading = true;
+      _uploadProgress = 0.05;
+    });
+
     try {
-      final liveUrl = await MediaPickerHelper.pickAndUploadMedia(accept: 'video/*');
+      final liveUrl = await MediaPickerHelper.pickAndUploadMedia(
+        accept: 'video/*',
+        captureCamera: captureCamera,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress = p);
+        },
+      );
+
       if (mounted) {
         setState(() => _isUploading = false);
         if (liveUrl != null && liveUrl.isNotEmpty) {
@@ -401,17 +421,17 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
           ),
         ),
 
-        // 5 Circular Action Buttons: កាមេរ៉ា, តន្ត្រី, គំរូ, សេចក្តីព្រាង, អេក្រង់ពណ៌បៃតង
+        // 5 Circular Action Buttons: កាមេរ៉ា, វិចិត្រសាល, តន្ត្រី, គំរូ, AI Label
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildTopRoundAction(CupertinoIcons.camera_fill, 'កាមេរ៉ា', _pickVideoFromDevice),
+              _buildTopRoundAction(CupertinoIcons.camera_fill, 'ថតកាមេរ៉ា', () => _pickVideoFromDevice(captureCamera: true)),
+              _buildTopRoundAction(CupertinoIcons.photo_on_rectangle, 'វិចិត្រសាល', () => _pickVideoFromDevice(captureCamera: false)),
               _buildTopRoundAction(CupertinoIcons.music_note, 'តន្ត្រី', _showAudioPicker),
               _buildTopRoundAction(CupertinoIcons.square_stack_3d_up_fill, 'គំរូ', () {}),
-              _buildTopRoundAction(CupertinoIcons.doc_plaintext, 'សេចក្តីព្រាង', () {}),
-              _buildTopRoundAction(CupertinoIcons.person_crop_square, 'អេក្រង់ពណ៌បៃតង', () {}),
+              _buildTopRoundAction(CupertinoIcons.sparkles, 'AI Label', () => setState(() => _aiLabelEnabled = !_aiLabelEnabled)),
             ],
           ),
         ),
@@ -472,10 +492,10 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
             ),
             itemCount: _sampleGalleryClips.length + 1,
             itemBuilder: (ctx, idx) {
-              // First slot: Upload from Phone / Device
+              // First slot: Open Camera (ថតកាមេរ៉ា)
               if (idx == 0) {
                 return GestureDetector(
-                  onTap: _pickVideoFromDevice,
+                  onTap: () => _pickVideoFromDevice(captureCamera: true),
                   child: Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFF1C1C1E),
@@ -483,24 +503,24 @@ class _CreateReelSheetState extends State<CreateReelSheet> {
                     ),
                     child: Center(
                       child: _isUploading
-                          ? const Column(
+                          ? Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                CupertinoActivityIndicator(color: CupertinoColors.white, radius: 14),
-                                SizedBox(height: 8),
+                                const CupertinoActivityIndicator(color: CupertinoColors.white, radius: 14),
+                                const SizedBox(height: 8),
                                 Text(
-                                  'កំពុងផ្ទុក...',
-                                  style: TextStyle(color: CupertinoColors.white, fontSize: 11),
+                                  'កំពុងផ្ទុក ${(_uploadProgress * 100).toInt()}%...',
+                                  style: const TextStyle(color: CupertinoColors.white, fontSize: 11),
                                 ),
                               ],
                             )
                           : Column(
                               mainAxisSize: MainAxisSize.min,
                               children: const [
-                                Icon(CupertinoIcons.plus_circle_fill, color: Color(0xFF007AFF), size: 36),
+                                Icon(CupertinoIcons.camera_fill, color: Color(0xFF007AFF), size: 36),
                                 SizedBox(height: 8),
                                 Text(
-                                  'ជ្រើសរើស\nពីទូរស័ព្ទ',
+                                  'ថតកាមេរ៉ា\n(Camera)',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: CupertinoColors.white,

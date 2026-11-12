@@ -436,26 +436,50 @@ class _PostCardState extends State<PostCard> {
                 builder: (context) {
                   final tplColors = _resolveTemplateColors(widget.post.templateStyle);
                   if (tplColors != null) {
+                    final contentLength = widget.post.content.trim().length;
+                    final dynamicFontSize = contentLength <= 35
+                        ? 26.0
+                        : (contentLength <= 85 ? 22.0 : 18.0);
+                    final dynamicFontWeight = contentLength <= 35
+                        ? FontWeight.w900
+                        : (contentLength <= 85 ? FontWeight.w800 : FontWeight.w700);
+
                     return Container(
                       width: double.infinity,
+                      constraints: const BoxConstraints(minHeight: 250),
                       margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: tplColors,
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: tplColors.first.withOpacity(0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                       ),
                       child: Text(
                         widget.post.content,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
+                        style: TextStyle(
+                          fontSize: dynamicFontSize,
+                          fontWeight: dynamicFontWeight,
                           height: 1.45,
                           color: CupertinoColors.white,
+                          shadows: const [
+                            Shadow(
+                              color: Color(0x66000000),
+                              offset: Offset(0, 2),
+                              blurRadius: 6,
+                            ),
+                          ],
                         ),
                       ),
                     );
@@ -487,19 +511,20 @@ class _PostCardState extends State<PostCard> {
                       lower.endsWith('.mov') ||
                       lower.startsWith('data:video');
                   if (isVid && candidate.isNotEmpty) {
+                    final isReel = widget.post.isReel;
                     return Padding(
                       padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: AspectRatio(
-                          aspectRatio: 16 / 9,
+                          aspectRatio: isReel ? (4 / 5) : (16 / 9),
                           child: WebVideoPlayerWidget(
                             videoUrl: candidate,
                             autoPlay: false,
                             isActive: true,
                             parentTabIndex: 0,
                             showControls: true,
-                            fit: BoxFit.contain,
+                            fit: isReel ? BoxFit.cover : BoxFit.cover,
                           ),
                         ),
                       ),

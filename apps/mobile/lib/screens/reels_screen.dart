@@ -227,27 +227,32 @@ class _ReelPageItemState extends State<_ReelPageItem> {
         // Video Viewport / Native Player
         Container(
           color: const Color(0xFF10121A),
-          child: isVideo
-              ? WebVideoPlayerWidget(
-                  videoUrl: videoUrl,
-                  autoPlay: widget.isActive,
-                  isActive: widget.isActive,
-                  parentTabIndex: 1,
-                  isLooping: true,
-                  showControls: true,
-                  bottomControlsPadding: 84,
-                  fit: BoxFit.cover,
-                )
-              : Image.network(
-                  media,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    color: const Color(0xFF1C1E29),
-                    child: const Center(
-                      child: Icon(CupertinoIcons.play_circle_fill, size: 70, color: CupertinoColors.white),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: isVideo
+                  ? WebVideoPlayerWidget(
+                      videoUrl: videoUrl,
+                      autoPlay: widget.isActive,
+                      isActive: widget.isActive,
+                      parentTabIndex: 1,
+                      isLooping: true,
+                      showControls: true,
+                      bottomControlsPadding: 84,
+                      fit: BoxFit.cover,
+                    )
+                  : Image.network(
+                      media,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: const Color(0xFF1C1E29),
+                        child: const Center(
+                          child: Icon(CupertinoIcons.play_circle_fill, size: 70, color: CupertinoColors.white),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+            ),
+          ),
         ),
 
         // Gradient Vignette Overlay

@@ -7,11 +7,17 @@ import '../services/api_service.dart';
 
 class MediaPickerHelper {
   /// Opens the native Web / Smartphone Gallery or File selector and returns the chosen HTML File.
-  static Future<html.File?> _pickRawHtmlFile({String accept = 'image/*,video/*'}) async {
+  static Future<html.File?> _pickRawHtmlFile({
+    String accept = 'image/*,video/*',
+    bool captureCamera = false,
+  }) async {
     if (!kIsWeb) return null;
 
     final completer = Completer<html.File?>();
     final input = html.FileUploadInputElement()..accept = accept;
+    if (captureCamera) {
+      input.setAttribute('capture', 'environment');
+    }
     input.style.display = 'none';
     html.document.body?.append(input);
 
@@ -31,19 +37,22 @@ class MediaPickerHelper {
 
     changeSub = input.onChange.listen((_) {
       final files = input.files;
-      if (files == null || files.isEmpty) {
-        finish(null);
-      } else {
+      if (files != null && files.isNotEmpty) {
         finish(files.first);
+      } else {
+        finish(null);
       }
     });
 
-    // If user closes iOS/Android/Desktop picker without choosing a file, window regains focus.
+    // Android/iOS safe focus timeout: Give 4 seconds before concluding cancel
+    // so mobile OS file pickers have ample time to deliver the file payload.
     focusSub = html.window.onFocus.listen((_) {
-      Future.delayed(const Duration(milliseconds: 550), () {
+      Future.delayed(const Duration(seconds: 4), () {
         if (!completer.isCompleted) {
           final files = input.files;
-          if (files == null || files.isEmpty) {
+          if (files != null && files.isNotEmpty) {
+            finish(files.first);
+          } else {
             finish(null);
           }
         }
@@ -79,6 +88,7 @@ class MediaPickerHelper {
   static Future<String?> _uploadBinaryMultipart(
     html.File file, {
     String? prefix,
+    void Function(double progress)? onProgress,
   }) async {
     final completer = Completer<String?>();
     try {
@@ -91,11 +101,31 @@ class MediaPickerHelper {
         formData.append('mimeType', file.type);
       }
 
+      // Check if running on Vercel: Vercel serverless has a 4.5MB limit on request payloads.
+      // Direct stream to the Cloudflare Tunnel endpoint supports up to 250MB HD videos/photos.
+      String uploadUrl = '/api/v1/storage/upload-file';
+      if (kIsWeb) {
+        final host = html.window.location.host;
+        if (host.contains('vercel.app')) {
+          uploadUrl = 'https://matthew-ozone-competitions-pets.trycloudflare.com/api/v1/storage/upload-file';
+        }
+      }
+
       final xhr = html.HttpRequest();
-      xhr.open('POST', '/api/v1/storage/upload-file');
+      xhr.open('POST', uploadUrl);
+
+      // Real upload percentage progress
+      xhr.upload.onProgress.listen((e) {
+        if (e.lengthComputable && e.total != null && e.total! > 0) {
+          final fraction = e.loaded! / e.total!;
+          onProgress?.call(fraction.clamp(0.0, 0.98));
+        }
+      });
+
       xhr.onLoadEnd.listen((_) {
         try {
           if (xhr.status != null && xhr.status! >= 200 && xhr.status! < 300) {
+            onProgress?.call(1.0);
             final parsed = jsonDecode(xhr.responseText ?? '{}');
             final url = (parsed['data']?['url'] ?? parsed['url']) as String?;
             if (!completer.isCompleted) completer.complete(url);
@@ -104,9 +134,11 @@ class MediaPickerHelper {
         } catch (_) {}
         if (!completer.isCompleted) completer.complete(null);
       });
+
       xhr.onError.listen((_) {
         if (!completer.isCompleted) completer.complete(null);
       });
+
       xhr.send(formData);
     } catch (_) {
       if (!completer.isCompleted) completer.complete(null);
@@ -118,17 +150,26 @@ class MediaPickerHelper {
   static Future<String?> pickAndUploadMedia({
     String accept = 'image/*',
     String? filename,
+    bool captureCamera = false,
+    void Function(double progress)? onProgress,
   }) async {
-    final file = await _pickRawHtmlFile(accept: accept);
+    final file = await _pickRawHtmlFile(accept: accept, captureCamera: captureCamera);
     if (file == null) return null;
 
+    onProgress?.call(0.05);
+
     // 1. Prefer raw binary FormData streaming (fast, handles large HD videos & photos cleanly)
-    final multipartUrl = await _uploadBinaryMultipart(file, prefix: filename ?? 'media');
+    final multipartUrl = await _uploadBinaryMultipart(
+      file,
+      prefix: filename ?? 'media',
+      onProgress: onProgress,
+    );
     if (multipartUrl != null && multipartUrl.isNotEmpty) {
       return multipartUrl;
     }
 
-    // 2. Fallback to Data URI upload if multipart failed (e.g., very small offline edge)
+    // 2. Fallback to Data URI upload if multipart failed
+    onProgress?.call(0.5);
     final reader = html.FileReader();
     final readCompleter = Completer<String?>();
     reader.onLoadEnd.listen((_) {
@@ -144,6 +185,7 @@ class MediaPickerHelper {
     if (base64Data == null || base64Data.isEmpty) return null;
 
     final liveUrl = await ApiService().uploadMedia(base64Data, filename: filename ?? file.name);
+    onProgress?.call(1.0);
     return liveUrl ?? base64Data;
   }
 }

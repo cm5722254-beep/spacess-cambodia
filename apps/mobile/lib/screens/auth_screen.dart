@@ -181,6 +181,32 @@ class _AuthScreenState extends State<AuthScreen> {
                             ),
                           ),
                         ),
+                        if (_selectedSegment == 1 &&
+                            (_errorMessage!.contains('ចុះឈ្មោះរួច') ||
+                             _errorMessage!.contains('ទូរស័ព្ទ') ||
+                             _errorMessage!.contains('already'))) ...[
+                          const SizedBox(width: 8),
+                          CupertinoButton(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            minSize: 0,
+                            color: const Color(0xFF007AFF),
+                            borderRadius: BorderRadius.circular(8),
+                            onPressed: () {
+                              setState(() {
+                                _selectedSegment = 0; // Switch to Login
+                                _errorMessage = null;
+                              });
+                            },
+                            child: const Text(
+                              'ចូលគណនី',
+                              style: TextStyle(
+                                color: CupertinoColors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

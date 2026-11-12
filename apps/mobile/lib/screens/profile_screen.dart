@@ -1423,13 +1423,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: SafeArea(
         bottom: false,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            ResponsiveLayout.horizontalPadding(context),
-            12,
-            ResponsiveLayout.horizontalPadding(context),
-            ResponsiveLayout.bottomDockClearance(context),
-          ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                ResponsiveLayout.horizontalPadding(context),
+                12,
+                ResponsiveLayout.horizontalPadding(context),
+                ResponsiveLayout.bottomDockClearance(context) + 60,
+              ),
           children: [
             // User Header Profile Card with Cover Banner (Liquid Glass)
             LiquidGlassContainer(
@@ -1729,7 +1732,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ],
                               const SizedBox(height: 14),
 
-                              // Two Main Facebook Buttons: [📊 ផ្ទាំងគ្រប់គ្រង] & [+ បង្កើត]
+                              // Main Facebook Action Buttons: [📊 ផ្ទាំងគ្រប់គ្រង] & [+ បង្កើត] & [⚙️ ការកំណត់]
                               Row(
                                 children: [
                                   Expanded(
@@ -1755,7 +1758,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: CupertinoButton(
                                       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1781,6 +1784,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           ),
                                         ],
                                       ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  CupertinoButton(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    color: isDark ? const Color(0xFF3A3B3C) : const Color(0xFFE4E6EB),
+                                    borderRadius: BorderRadius.circular(12),
+                                    onPressed: _openSettingsDrawerSheet,
+                                    child: Icon(
+                                      CupertinoIcons.gear_solid,
+                                      size: 18,
+                                      color: isDark ? CupertinoColors.white : const Color(0xFF050505),
                                     ),
                                   ),
                                 ],
@@ -2049,10 +2064,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 ),
             ],
+            const SizedBox(height: 50),
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
           },
         );
       },

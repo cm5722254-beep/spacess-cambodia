@@ -112,8 +112,16 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
   }
 
   void _pickFromDevice() async {
-    setState(() => isImporting = true);
-    final media = await MediaPickerHelper.pickAndUploadMedia(accept: 'image/*,video/*');
+    setState(() {
+      isImporting = true;
+      _uploadProgress = 0.05;
+    });
+    final media = await MediaPickerHelper.pickAndUploadMedia(
+      accept: 'image/*,video/*',
+      onProgress: (p) {
+        if (mounted) setState(() => _uploadProgress = p);
+      },
+    );
     if (mounted) {
       setState(() {
         isImporting = false;
@@ -491,26 +499,33 @@ class _CreatePostSheetState extends State<CreatePostSheet> {
                   if (isColoredBg)
                     Container(
                       width: double.infinity,
-                      height: 220,
-                      padding: const EdgeInsets.all(20),
+                      height: 260,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 30),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: activeTheme['colors'] as List<Color>,
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (activeTheme['colors'] as List<Color>).first.withOpacity(0.35),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
                       ),
                       child: Center(
                         child: CupertinoTextField(
                           controller: _contentController,
                           placeholder: 'តើអ្នកកំពុងគិតអ្វី?',
-                          placeholderStyle: const TextStyle(color: CupertinoColors.white, fontSize: 20, fontWeight: FontWeight.w700),
+                          placeholderStyle: const TextStyle(color: CupertinoColors.white, fontSize: 22, fontWeight: FontWeight.w800),
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: CupertinoColors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
                             shadows: [Shadow(blurRadius: 6, color: Colors.black26)],
                           ),
                           maxLines: 5,

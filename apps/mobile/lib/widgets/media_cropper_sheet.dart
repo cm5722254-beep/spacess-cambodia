@@ -293,3 +293,4 @@ class _MediaCropperSheetState extends State<MediaCropperSheet> {
     );
   }
 }
+

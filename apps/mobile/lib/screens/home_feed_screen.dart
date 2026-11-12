@@ -932,11 +932,16 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final post = posts[index];
-                  return PostCard(
-                    post: post,
-                    onCommentTap: () => _openCommentsModal(post),
-                    onPostDeleted: () => _loadInitialData(),
-                    onPostUpdated: () => _loadInitialData(),
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 640),
+                      child: PostCard(
+                        post: post,
+                        onCommentTap: () => _openCommentsModal(post),
+                        onPostDeleted: () => _loadInitialData(),
+                        onPostUpdated: () => _loadInitialData(),
+                      ),
+                    ),
                   );
                 },
                 childCount: posts.length,
