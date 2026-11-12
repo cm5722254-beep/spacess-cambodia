@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: spaces-cambodia-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./apps/backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"
+      - key: API_PREFIX
+        value: /api/v1
+      - key: INSTANCE_MODE
+        value: mixed
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: spaceapp
+      - key: R2_PUBLIC_URL
+        value: https://pub-0d8b4081686f4f9c831f30f7fd9062c9.r2.dev

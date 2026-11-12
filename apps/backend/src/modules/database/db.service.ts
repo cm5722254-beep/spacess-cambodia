@@ -1,7 +1,8 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { getR2Config, getR2Object, putR2Object } from '../storage/r2-client.util';
 
 export interface UserEntity {
   id: string;
@@ -251,8 +252,11 @@ export interface DatabaseState {
 }
 
 @Injectable()
-export class DbService implements OnModuleInit {
+export class DbService implements OnModuleInit, OnModuleDestroy {
+  private readonly r2StateKey = 'db/spaces_db.json';
   private dbPath: string;
+  private r2SyncTimer: NodeJS.Timeout | null = null;
+  private r2SyncPending = false;
   private state: DatabaseState = {
     users: [],
     posts: [],
@@ -272,7 +276,7 @@ export class DbService implements OnModuleInit {
     notifications: [],
   };
 
-  onModuleInit() {
+  async onModuleInit() {
     const dataDir = process.env.DATA_DIR
       ? path.resolve(process.env.DATA_DIR)
       : path.resolve(process.cwd(), 'data');
@@ -280,11 +284,21 @@ export class DbService implements OnModuleInit {
       fs.mkdirSync(dataDir, { recursive: true });
     }
     this.dbPath = path.join(dataDir, 'spaces_db.json');
-    this.load();
+    await this.load();
   }
 
-  importState(nextState: Partial<DatabaseState>) {
-    this.state = {
+  async onModuleDestroy() {
+    if (this.r2SyncTimer) {
+      clearTimeout(this.r2SyncTimer);
+      this.r2SyncTimer = null;
+      await this.pushStateToR2();
+    } else if (this.r2SyncPending) {
+      await this.pushStateToR2();
+    }
+  }
+
+  private normalizeState(nextState: Partial<DatabaseState>): DatabaseState {
+    return {
       users: Array.isArray(nextState.users) ? nextState.users : [],
       posts: Array.isArray(nextState.posts) ? nextState.posts : [],
       comments: Array.isArray(nextState.comments) ? nextState.comments : [],
@@ -302,6 +316,10 @@ export class DbService implements OnModuleInit {
       blockedUsers: Array.isArray(nextState.blockedUsers) ? nextState.blockedUsers : [],
       notifications: Array.isArray(nextState.notifications) ? nextState.notifications : [],
     };
+  }
+
+  importState(nextState: Partial<DatabaseState>) {
+    this.state = this.normalizeState(nextState);
     this.save();
     return this.getStats();
   }
@@ -311,29 +329,35 @@ export class DbService implements OnModuleInit {
     return crypto.scryptSync(password, salt, 32).toString('hex');
   }
 
-  private load() {
+  private async load() {
     if (fs.existsSync(this.dbPath)) {
       try {
         const raw = fs.readFileSync(this.dbPath, 'utf8');
-        this.state = JSON.parse(raw);
-        if (!this.state.orders) this.state.orders = [];
-        if (!this.state.stories) this.state.stories = [];
-        if (!this.state.streams) this.state.streams = [];
-        if (!this.state.friendRequests) this.state.friendRequests = [];
-        if (!this.state.chats) this.state.chats = [];
-        if (!this.state.messages) this.state.messages = [];
-        if (!this.state.reports) this.state.reports = [];
-        if (!this.state.blockedUsers) this.state.blockedUsers = [];
-        if (!this.state.notifications) this.state.notifications = [];
+        this.state = this.normalizeState(JSON.parse(raw));
         console.log(`[DbService] Database loaded from ${this.dbPath} (Users: ${this.state.users.length}, Posts: ${this.state.posts.length})`);
         return;
       } catch (err) {
-        console.error('[DbService] Error parsing database file, initializing clean state:', err);
+        console.error('[DbService] Error parsing database file, checking R2 backup:', err);
+      }
+    }
+
+    if (getR2Config()) {
+      try {
+        const r2Res = await getR2Object(this.r2StateKey);
+        if (r2Res && r2Res.ok) {
+          const text = await r2Res.text();
+          this.state = this.normalizeState(JSON.parse(text));
+          this.save(false);
+          console.log(`[DbService] Restored database from Cloudflare R2 (Users: ${this.state.users.length}, Posts: ${this.state.posts.length})`);
+          return;
+        }
+      } catch (err) {
+        console.warn('[DbService] Could not restore state from R2:', err);
       }
     }
 
     // Initialize clean database state with Default Admin and initial test user
-    this.state = {
+    this.state = this.normalizeState({
       users: [
         {
           id: 'admin-1',
@@ -355,30 +379,43 @@ export class DbService implements OnModuleInit {
           createdAt: new Date().toISOString(),
         },
       ],
-      posts: [],
-      comments: [],
-      reactions: [],
-      savedPosts: [],
-      follows: [],
-      friendRequests: [],
-      products: [],
-      orders: [],
-      stories: [],
-      streams: [],
-      chats: [],
-      messages: [],
-    };
-    this.save();
+    });
+    this.save(false);
     console.log(`[DbService] Clean persistent database initialized at ${this.dbPath}`);
   }
 
-  private save() {
+  private async pushStateToR2() {
+    if (!getR2Config()) return;
+    this.r2SyncPending = true;
+    try {
+      const payload = Buffer.from(JSON.stringify(this.state), 'utf8');
+      const res = await putR2Object(this.r2StateKey, payload, 'application/json');
+      if (!res.ok) {
+        console.warn(`[DbService] R2 backup returned ${res.status ?? 'error'}: ${(res.errorText || '').slice(0, 150)}`);
+      }
+    } catch (err) {
+      console.warn('[DbService] Failed syncing DB state to R2:', err);
+    } finally {
+      this.r2SyncPending = false;
+    }
+  }
+
+  private save(syncR2: boolean = true) {
     try {
       const tmpPath = `${this.dbPath}.tmp`;
       fs.writeFileSync(tmpPath, JSON.stringify(this.state, null, 2), 'utf8');
       fs.renameSync(tmpPath, this.dbPath);
     } catch (err) {
       console.error('[DbService] Error saving database to disk:', err);
+    }
+
+    if (syncR2 && getR2Config()) {
+      this.r2SyncPending = true;
+      if (this.r2SyncTimer) clearTimeout(this.r2SyncTimer);
+      this.r2SyncTimer = setTimeout(() => {
+        this.r2SyncTimer = null;
+        void this.pushStateToR2();
+      }, 600);
     }
   }
 

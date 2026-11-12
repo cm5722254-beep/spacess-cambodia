@@ -40,6 +40,14 @@ async function bootstrap() {
   if (legacyUploadDir !== uploadDir && fs.existsSync(legacyUploadDir)) {
     app.use('/uploads', express.static(legacyUploadDir));
   }
+  app.use('/uploads', (req, res, next) => {
+    const r2PublicUrl = (process.env.R2_PUBLIC_URL || '').trim().replace(/\/+$/, '');
+    const safeName = path.basename(req.path || '');
+    if (r2PublicUrl && safeName && safeName !== '/' && safeName !== 'uploads') {
+      return res.redirect(302, `${r2PublicUrl}/media/${encodeURIComponent(safeName)}`);
+    }
+    next();
+  });
   if (fs.existsSync(publicDir)) {
     app.use(express.static(publicDir));
   }

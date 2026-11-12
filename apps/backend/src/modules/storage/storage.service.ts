@@ -2,14 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { getR2Config, getR2Object, putR2Object, R2Config } from './r2-client.util';
 
-export interface R2Config {
-  accountId: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  bucketName: string;
-  publicUrl: string;
-}
+export { R2Config };
 
 export interface StoredMediaResult {
   url: string;
@@ -42,107 +37,7 @@ export class StorageService {
   }
 
   getR2Config(): R2Config | null {
-    const accountId = (process.env.R2_ACCOUNT_ID || '').trim();
-    const accessKeyId = (process.env.R2_ACCESS_KEY_ID || '').trim();
-    const secretAccessKey = (process.env.R2_SECRET_ACCESS_KEY || '').trim();
-    const bucketName = (process.env.R2_BUCKET_NAME || '').trim();
-    const publicUrl = (process.env.R2_PUBLIC_URL || '').trim().replace(/\/+$/, '');
-
-    if (
-      !accountId ||
-      !accessKeyId ||
-      !secretAccessKey ||
-      !bucketName ||
-      accountId.startsWith('YOUR_') ||
-      accessKeyId.startsWith('YOUR_') ||
-      secretAccessKey.startsWith('YOUR_')
-    ) {
-      return null;
-    }
-
-    return { accountId, accessKeyId, secretAccessKey, bucketName, publicUrl };
-  }
-
-  private sha256Hex(data: Buffer | string): string {
-    return crypto.createHash('sha256').update(data).digest('hex');
-  }
-
-  private hmac(key: Buffer | string, data: string): Buffer {
-    return crypto.createHmac('sha256', key).update(data, 'utf8').digest();
-  }
-
-  private signR2Request(
-    cfg: R2Config,
-    method: 'PUT' | 'GET' | 'DELETE',
-    objectKey: string,
-    payloadHash: string,
-    extraHeaders: Record<string, string> = {},
-  ): { endpointUrl: string; headers: Record<string, string> } {
-    const host = `${cfg.accountId}.r2.cloudflarestorage.com`;
-    const cleanKey = objectKey.replace(/^\/+/, '');
-    const canonicalUri = `/${cfg.bucketName}/${cleanKey}`;
-    const endpointUrl = `https://${host}${canonicalUri}`;
-
-    const now = new Date();
-    const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const dateStamp = amzDate.slice(0, 8);
-    const region = 'auto';
-    const service = 's3';
-
-    const headerMap: Record<string, string> = {
-      host,
-      'x-amz-content-sha256': payloadHash,
-      'x-amz-date': amzDate,
-    };
-
-    for (const [k, v] of Object.entries(extraHeaders)) {
-      if (v) {
-        headerMap[k.toLowerCase()] = v.trim();
-      }
-    }
-
-    const sortedKeys = Object.keys(headerMap).sort();
-    const canonicalHeaders = sortedKeys.map((k) => `${k}:${headerMap[k]}\n`).join('');
-    const signedHeaders = sortedKeys.join(';');
-
-    const canonicalRequest = [
-      method,
-      canonicalUri,
-      '',
-      canonicalHeaders,
-      signedHeaders,
-      payloadHash,
-    ].join('\n');
-
-    const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-    const stringToSign = [
-      'AWS4-HMAC-SHA256',
-      amzDate,
-      credentialScope,
-      this.sha256Hex(canonicalRequest),
-    ].join('\n');
-
-    const kDate = this.hmac(`AWS4${cfg.secretAccessKey}`, dateStamp);
-    const kRegion = this.hmac(kDate, region);
-    const kService = this.hmac(kRegion, service);
-    const kSigning = this.hmac(kService, 'aws4_request');
-    const signature = crypto
-      .createHmac('sha256', kSigning)
-      .update(stringToSign, 'utf8')
-      .digest('hex');
-
-    const authorization = `AWS4-HMAC-SHA256 Credential=${cfg.accessKeyId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
-
-    const requestHeaders: Record<string, string> = {
-      'x-amz-date': amzDate,
-      'x-amz-content-sha256': payloadHash,
-      Authorization: authorization,
-    };
-    for (const [k, v] of Object.entries(extraHeaders)) {
-      if (v) requestHeaders[k] = v;
-    }
-
-    return { endpointUrl, headers: requestHeaders };
+    return getR2Config();
   }
 
   async saveBuffer(
@@ -159,23 +54,15 @@ export class StorageService {
     const r2 = this.getR2Config();
     if (r2) {
       try {
-        const payloadHash = this.sha256Hex(buffer);
-        const { endpointUrl, headers } = this.signR2Request(r2, 'PUT', r2Key, payloadHash, {
-          'content-type': contentType,
-        });
-        const response = await fetch(endpointUrl, {
-          method: 'PUT',
-          headers,
-          body: new Uint8Array(buffer),
-        });
-        if (response.ok) {
-          const publicUrl = r2.publicUrl
-            ? `${r2.publicUrl}/${r2Key}`
-            : `/api/v1/storage/object?key=${encodeURIComponent(r2Key)}`;
+        const res = await putR2Object(r2Key, buffer, contentType);
+        if (res.ok) {
+          const publicUrl =
+            res.publicUrl || `/api/v1/storage/object?key=${encodeURIComponent(r2Key)}`;
           return { url: publicUrl, filename, storage: 'r2', key: r2Key };
         }
-        const errBody = await response.text().catch(() => '');
-        this.logger.warn(`R2 upload returned ${response.status}: ${errBody.slice(0, 200)}`);
+        this.logger.warn(
+          `R2 upload returned ${res.status ?? 'error'}: ${(res.errorText || '').slice(0, 200)}`,
+        );
       } catch (err: any) {
         this.logger.warn(`R2 upload failed, falling back to local disk: ${err?.message || err}`);
       }
@@ -190,15 +77,7 @@ export class StorageService {
   }
 
   async fetchR2Object(objectKey: string, rangeHeader?: string): Promise<Response | null> {
-    const r2 = this.getR2Config();
-    if (!r2 || !objectKey) return null;
-    const emptyHash = this.sha256Hex('');
-    const extra: Record<string, string> = {};
-    if (rangeHeader) {
-      extra.range = rangeHeader;
-    }
-    const { endpointUrl, headers } = this.signR2Request(r2, 'GET', objectKey, emptyHash, extra);
-    return fetch(endpointUrl, { method: 'GET', headers });
+    return getR2Object(objectKey, rangeHeader);
   }
 
   private resolveMimeAndExt(mime: string): { ext: string; contentType: string } {
