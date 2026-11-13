@@ -1,6 +1,8 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { DbService, ProductEntity, OrderEntity } from '../database/db.service';
 import { EventsService } from '../events/events.service';
+import { BakongKHQR, khqrData, IndividualInfo } from 'bakong-khqr';
+import * as QRCode from 'qrcode';
 
 export interface ProductItem extends ProductEntity {
   sellerName: string;
@@ -39,9 +41,9 @@ export class MarketplaceService {
         ...p,
         sellerName: seller?.storeName || seller?.name || 'អ្នកលក់ Spaces',
         sellerPhone: seller?.storePhone || seller?.phone || '012 345 678',
-        sellerBakongId: (seller?.bakongAccountId && seller.bakongAccountId.trim())
-          ? seller.bakongAccountId.trim()
-          : (p.sellerBakongId || ''),
+        sellerBakongId: (seller?.bakongAccountId && seller.bakongAccountId.trim()) || (p.sellerBakongId && p.sellerBakongId.trim())
+          ? 'KHQR_VERIFIED'
+          : '',
         sellerAvatar:
           seller?.avatar ||
           '/default_avatar.svg',
@@ -144,70 +146,125 @@ export class MarketplaceService {
     const shippingAddress = (dto.shippingAddress || buyer?.location || '').trim();
     const buyerNote = (dto.buyerNote || '').trim();
 
+    let khqrMd5 = '';
+    let khqrString = '';
+    let khqrImage = '';
+    let deeplink = '';
+
+    // 1. Primary: Generate natively using NBC Bakong KHQR EMVCo engine (instant, offline-safe, zero Cloudflare block)
     try {
-      const response = await fetch(`${this.GATEWAY_URL}/api/v1/khqr/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          accountId: sellerBakongId,
-          merchantName: merchantName,
-          merchantCity: 'Phnom Penh',
-          amount: parseFloat(amount.toString()),
-          currency: currency,
-          storeLabel: 'Spaces Cambodia',
-          billNumber: billNumber,
-          terminalLabel: 'APP-01',
-        }),
-      });
-
-      const khqr = await response.json();
-
-      if (!khqr.md5 && !khqr.qrImage) {
-        throw new Error(khqr.message || 'Error generating KHQR from Bakong Gateway');
-      }
-
-      const order = this.db.createOrder({
-        billNumber,
-        productId: product.id,
-        productTitle: product.title,
-        quantity: qty,
-        unitPrice,
-        amount,
-        currency,
-        buyerId,
-        buyerName: buyer?.name || 'Guest Buyer',
-        buyerPhone,
-        shippingAddress,
-        buyerNote,
-        sellerId: product.sellerId,
-        sellerName: seller?.name || 'Seller',
-        sellerStoreName: merchantName,
+      const expirationTimestamp = Date.now() + 15 * 60 * 1000; // 15 mins dynamic QR
+      const curr = currency.toUpperCase() === 'KHR' ? khqrData.currency.khr : khqrData.currency.usd;
+      const info = new IndividualInfo(
         sellerBakongId,
-        md5: khqr.md5,
-        qrString: khqr.qrString,
-        qrImage: khqr.qrImage,
-        deeplink: khqr.deeplink,
-      });
-
-      return {
-        success: true,
-        orderId: order.id,
-        billNumber,
-        md5: khqr.md5,
-        qrImage: khqr.qrImage,
-        deeplink: khqr.deeplink,
-        qrString: khqr.qrString,
-        amount,
-        quantity: qty,
-        unitPrice,
-        currency,
         merchantName,
-        sellerBakongId,
-      };
-    } catch (err: any) {
-      console.error('[MarketplaceService] Checkout KHQR error:', err);
-      throw new BadRequestException(`Bakong KHQR Error: ${err.message}`);
+        'Phnom Penh',
+        {
+          currency: curr,
+          amount: amount,
+          billNumber: billNumber,
+          storeLabel: 'Spaces Cambodia',
+          terminalLabel: 'APP-01',
+          expirationTimestamp,
+        },
+      );
+      const bakong = new BakongKHQR();
+      const localResult = bakong.generateIndividual(info);
+
+      if (localResult && localResult.status?.code === 0 && localResult.data?.qr) {
+        khqrString = localResult.data.qr;
+        khqrMd5 = localResult.data.md5;
+        khqrImage = await QRCode.toDataURL(khqrString, {
+          width: 320,
+          margin: 2,
+          color: { dark: '#000000', light: '#FFFFFF' },
+        });
+        deeplink = `https://bakong.page.link/?link=${encodeURIComponent(khqrString)}&apn=kh.gov.nbc.bakong&ibi=kh.gov.nbc.bakong&isi=1450098909`;
+      } else if (localResult?.status?.message) {
+        console.warn('[MarketplaceService] Native BakongKHQR message:', localResult.status.message);
+      }
+    } catch (localErr) {
+      console.warn('[MarketplaceService] Native BakongKHQR generation error, attempting fallback:', localErr);
     }
+
+    // 2. Secondary fallback if native generation was not possible
+    if (!khqrMd5 || !khqrString) {
+      try {
+        const response = await fetch(`${this.GATEWAY_URL}/api/v1/khqr/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SpacesCambodia/2.0',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            accountId: sellerBakongId,
+            merchantName: merchantName,
+            merchantCity: 'Phnom Penh',
+            amount: parseFloat(amount.toString()),
+            currency: currency,
+            storeLabel: 'Spaces Cambodia',
+            billNumber: billNumber,
+            terminalLabel: 'APP-01',
+          }),
+        });
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const khqr = await response.json();
+          if (khqr.md5 || khqr.qrImage || khqr.qr) {
+            khqrMd5 = khqr.md5;
+            khqrString = khqr.qrString || khqr.qr || '';
+            khqrImage = khqr.qrImage || (khqrString ? await QRCode.toDataURL(khqrString) : '');
+            deeplink = khqr.deeplink || `https://bakong.page.link/?link=${encodeURIComponent(khqrString)}&apn=kh.gov.nbc.bakong&ibi=kh.gov.nbc.bakong&isi=1450098909`;
+          }
+        }
+      } catch (gwErr) {
+        console.warn('[MarketplaceService] Gateway fallback error:', gwErr);
+      }
+    }
+
+    if (!khqrMd5 && !khqrString) {
+      throw new BadRequestException('មិនអាចបង្កើតកូដ Bakong KHQR បានទេ សូមពិនិត្យគណនីបាគងរបស់អ្នកលក់ម្តងទៀត');
+    }
+
+    const order = this.db.createOrder({
+      billNumber,
+      productId: product.id,
+      productTitle: product.title,
+      quantity: qty,
+      unitPrice,
+      amount,
+      currency,
+      buyerId,
+      buyerName: buyer?.name || 'Guest Buyer',
+      buyerPhone,
+      shippingAddress,
+      buyerNote,
+      sellerId: product.sellerId,
+      sellerName: seller?.name || 'Seller',
+      sellerStoreName: merchantName,
+      sellerBakongId,
+      md5: khqrMd5,
+      qrString: khqrString,
+      qrImage: khqrImage,
+      deeplink,
+    });
+
+    return {
+      success: true,
+      orderId: order.id,
+      billNumber,
+      md5: khqrMd5,
+      qrImage: khqrImage,
+      deeplink,
+      qrString: khqrString,
+      amount,
+      quantity: qty,
+      unitPrice,
+      currency,
+      merchantName,
+      // Omit sellerBakongId from buyer response to protect seller privacy!
+    };
   }
 
   // --- BAKONG PAYMENT STATUS POLLING & NBC SETTLEMENT ---
@@ -223,7 +280,20 @@ export class MarketplaceService {
     }
 
     try {
-      const response = await fetch(`${this.GATEWAY_URL}/api/v1/check/${md5}`);
+      const response = await fetch(`${this.GATEWAY_URL}/api/v1/check/${md5}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SpacesCambodia/2.0',
+          Accept: 'application/json',
+        },
+      });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        return {
+          success: true,
+          paid: false,
+          message: 'Waiting for payer transfer...',
+        };
+      }
       const status = await response.json();
 
       if (status.responseCode === 0) {

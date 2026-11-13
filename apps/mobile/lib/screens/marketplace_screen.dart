@@ -578,10 +578,16 @@ class _ProductDetailSheet extends StatelessWidget {
                               style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
                             ),
                             if (product.sellerBakongId != null && product.sellerBakongId!.isNotEmpty) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                'Bakong KHQR: ${product.sellerBakongId}',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFFE1251B)),
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  const Icon(CupertinoIcons.checkmark_seal_fill, size: 12, color: Color(0xFFE1251B)),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    tr('ទទួលការទូទាត់ Bakong KHQR', 'Accepts Bakong KHQR'),
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFE1251B)),
+                                  ),
+                                ],
                               ),
                             ],
                           ],

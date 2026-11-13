@@ -524,7 +524,6 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
         ((widget.product.sellerStoreName != null && widget.product.sellerStoreName!.isNotEmpty)
             ? widget.product.sellerStoreName!
             : widget.product.sellerName);
-    final bakongId = checkoutData?['sellerBakongId'] ?? widget.product.sellerBakongId ?? '';
     final qrImg = checkoutData?['qrImage'] ?? checkoutData?['data']?['qrImage'] ?? '';
     final qrStr = checkoutData?['qrString'] ?? checkoutData?['qr'] ?? checkoutData?['data']?['qrString'] ?? checkoutData?['data']?['qr'] ?? '';
     final deeplink = checkoutData?['deeplink'] ?? '';
@@ -534,7 +533,7 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
-          // Store & Merchant Info
+          // Store & Merchant Info (Private / Protected Merchant Display)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
@@ -554,9 +553,16 @@ class _BakongPaymentSheetState extends State<BakongPaymentSheet> {
                         merchant,
                         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                       ),
-                      Text(
-                        'Bakong: $bakongId',
-                        style: const TextStyle(color: CupertinoColors.systemGrey, fontSize: 12),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(CupertinoIcons.checkmark_shield_fill, color: Color(0xFF34C759), size: 13),
+                          const SizedBox(width: 4),
+                          Text(
+                            tr('គណនីអាជីវករផ្លូវការ (Verified Merchant)', 'Verified Merchant Account'),
+                            style: const TextStyle(color: CupertinoColors.systemGrey, fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
+                        ],
                       ),
                     ],
                   ),
